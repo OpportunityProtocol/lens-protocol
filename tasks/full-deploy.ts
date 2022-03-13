@@ -226,6 +226,28 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
       .whitelistCurrency(currency.address, true, { nonce: governanceNonce++ })
   );
 
+  const centralizedArbitrator= await deployContract(
+    new SimpleCentralizedArbitrator__factory(deployer).deploy({ nonce: deployerNonce++ })
+  );
+
+  const gigEarth = await deployContract(
+    new GigEarth__factory(deployer).deploy(deployer.address, '0', centralizedArbitrator.address, lensHub.address, { nonce: deployerNonce++ })
+  );
+
+  console.log('\n\t-- Deploying GigEarthReferenceModule --');
+  const gigEarthReferenceModule = await deployContract(
+    new RelationshipContentReferenceModule__factory(deployer).deploy(lensHub.address, moduleGlobals.address, gigEarth.address, {
+      nonce: deployerNonce++,
+    })
+  );
+
+  console.log('\n\t-- Deploying GigEarthFollowModule --');
+  const gigEarthFollowModule = await deployContract(
+    new   RelationshipFollowModule__factory(deployer).deploy(lensHub.address, gigEarth.address, {
+      nonce: deployerNonce++,
+    })
+  );
+
   // Save and log the addresses
   const addrs = {
     'lensHub proxy': lensHub.address,
