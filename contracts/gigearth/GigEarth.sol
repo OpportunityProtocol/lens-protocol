@@ -3,10 +3,11 @@ pragma solidity ^0.8.7;
 
 import "./interface/IArbitrable.sol";
 import "./interface/IEvidence.sol";
-import "../lens-protocol/contracts/interfaces/ILensHub.sol";
-import "../lens-protocol/contracts/libraries/DataTypes.sol";
+import "../interfaces/ILensHub.sol";
+import "../libraries/DataTypes.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 interface IContentReferenceModule {
     function getPubIdByRelationship(uint256 _id) external view returns(uint256);
 }
@@ -163,9 +164,16 @@ contract GigEarth is IArbitrable, IEvidence {
     mapping(uint256 => uint256) public relationshipIDToDeadline;
     mapping(uint256 => uint256) public disputeIDtoRelationshipID;
     mapping(uint256 => RelationshipEscrowDetails) public relationshipIDToEscrowDetails;
+    mapping(address => bool) public universalAddressToAutomatedActions;
 
     modifier onlyGovernance() {
         require(msg.sender == governance);
+        _;
+    }
+
+    modifier onlyWhenStatus(uint256 _relationshipID, ContractStatus _status) {
+        Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
+        require(relationship.contractStatus == _status);
         _;
     }
 
@@ -226,7 +234,7 @@ contract GigEarth is IArbitrable, IEvidence {
         numRelationships++;
     }
 
-    function grantProposalRequest(uint256 _relationshipID, address _newWorker, address _valuePtr,uint256 _wad, string memory _extraData) external   {
+    function grantProposalRequest(uint256 _relationshipID, address _newWorker, address _valuePtr,uint256 _wad, string memory _extraData) external onlyWhenStatus(_relationshipID, ContractStatus.AwaitingWorker)   {
         Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
 
         require(msg.sender == relationship.employer, "Only the employer of this relationship can grant the proposal.");
@@ -240,20 +248,17 @@ contract GigEarth is IArbitrable, IEvidence {
         relationship.valuePtr = _valuePtr;
         relationship.worker = _newWorker;
         relationship.acceptanceTimestamp = block.timestamp;
-
         relationship.contractOwnership = ContractOwnership.Pending;
-        relationship.contractStatus = ContractStatus.AwaitingWorkerApproval;
 
         emit ContractStatusUpdate();
         emit ContractOwnershipUpdate();
     }
 
-    function work(uint256 _relationshipID, string memory _extraData) external   {
+    function work(uint256 _relationshipID, string memory _extraData) external onlyWhenStatus(_relationshipID, ContractStatus.AwaitingWorker) {
         Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
 
         require(msg.sender == relationship.worker);
         require(relationship.contractOwnership == ContractOwnership.Pending);
-        require(relationship.contractStatus == ContractStatus.AwaitingWorkerApproval);
 
         _initializeEscrowFundsAndTransfer(_relationshipID);
 
@@ -266,23 +271,26 @@ contract GigEarth is IArbitrable, IEvidence {
         emit ContractOwnershipUpdate();
     }
 
-    function releaseJob(uint256 _relationshipID) external   {
+    function releaseJob(uint256 _relationshipID) external onlyWhenStatus(_relationshipID, ContractStatus.AwaitingWorker)  {
         Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
         require(relationship.contractOwnership == ContractOwnership.Claimed);
 
-        relationship.worker = address(0);
-        relationship.acceptanceTimestamp = 0;
-        relationship.wad = 0;
-        relationship.contractStatus = ContractStatus.AwaitingWorker;
-        relationship.contractOwnership = ContractOwnership.Unclaimed;
-
         _surrenderFunds(_relationshipID);
+        resetRelationshipState(relationship);
 
         emit ContractStatusUpdate();
         emit ContractOwnershipUpdate();
     }
 
-    function updateTaskMetadataPointer(uint256 _relationshipID, string calldata _newTaskPointerHash) external   {
+    function resetRelationshipState(Relationship storage relationship) internal {
+        relationship.worker = address(0);
+        relationship.acceptanceTimestamp = 0;
+        relationship.wad = 0;
+        relationship.contractStatus = ContractStatus.AwaitingWorker;
+        relationship.contractOwnership = ContractOwnership.Unclaimed;
+    }
+
+    function updateTaskMetadataPointer(uint256 _relationshipID, string calldata _newTaskPointerHash) external onlyWhenStatus(_relationshipID, ContractStatus.AwaitingWorker)  {
         Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
 
         require(msg.sender == relationship.employer);
@@ -290,8 +298,14 @@ contract GigEarth is IArbitrable, IEvidence {
 
         relationship.taskMetadataPtr = _newTaskPointerHash;
     }
+    
+    /* The final solution hash - can be called as long as resolveTraditional hasn't been called  */
+    function submitWork(uint256 _relationshipID, string calldata _solutionMetadataPtr) onlyWhenStatus(_relationshipID, ContractStatus.AwaitingWorker) external {
+        Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
+        require(msg.sender == relationship.worker);
 
-    function submitWork() external {}
+        relationship.solutionMetadataPtr = _solutionMetadataPtr;
+    }
 
     function resolveTraditional(uint256 _relationshipID, uint256 _satisfactoryScore, DataTypes.EIP712Signature calldata _sig) external   {
         Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
@@ -300,6 +314,9 @@ contract GigEarth is IArbitrable, IEvidence {
         require(relationship.worker != address(0));
         require(relationship.wad != uint256(0));
         require(relationship.contractStatus == ContractStatus.AwaitingResolution);
+
+        bytes memory testEmptyString = bytes(relationship.solutionMetadataPtr);
+        require(testEmptyString.length != 0);
 
         if (relationship.contractPayoutType == ContractPayoutType.Flat) {
             _resolveContractAndRewardWorker(_relationshipID);
@@ -321,6 +338,7 @@ contract GigEarth is IArbitrable, IEvidence {
         bytes[] memory b = new bytes[](1);
         b[0] = abi.encode(_relationshipID, _satisfactoryScore);
 
+        if (universalAddressToAutomatedActions[msg.sender] == true) {
         lensHub.followWithSig(DataTypes.FollowWithSigData({
             follower: relationship.employer,
             profileIds: profileIds,
@@ -336,11 +354,10 @@ contract GigEarth is IArbitrable, IEvidence {
             referenceModule: LENS_CONTENT_REFERENCE_MODULE,
             referenceModuleData: abi.encode(_relationshipID, relationship.valuePtr,  universalAddressToSummary[relationship.worker].referenceFee)
         }));
+        }
         
         emit ContractStatusUpdate();
     }
-
-    function resolveBounty(uint256 _relationshipID, address _worker) external {}
 
     /**
      * @notice Sets the contract status to resolved and releases the funds to the appropriate user.
@@ -535,9 +552,7 @@ contract GigEarth is IArbitrable, IEvidence {
     function _surrenderFunds(uint256 _relationshipID) internal {
         Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
         RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
-
         require(msg.sender == relationship.worker);
-
         IERC20(relationship.valuePtr).transfer(relationship.employer,  relationship.wad);
     }
 
@@ -575,7 +590,6 @@ contract GigEarth is IArbitrable, IEvidence {
         //register user to lenshub and retrieve the user id from the profile handle (to will be GigEarth and user's can elect to remove opportunity as owner - will mint the nft back to the user)
         lensHub.createProfile(vars);
         uint256 lensProfileId = lensHub.getProfileIdByHandle(vars.handle);
-        lensHub.setDispatcher(lensProfileId, address(this));
         
         //create a user summary and assign the user's address to the summary
         universalAddressToSummary[msg.sender] = _createUserSummary(msg.sender, lensProfileId);
@@ -584,6 +598,14 @@ contract GigEarth is IArbitrable, IEvidence {
         emit UserRegistered(msg.sender);
         
         return userSummaries.length - 1;
+    }
+
+    function toggleAutomatedActions(bool _allowAutomatedActions) external {
+        universalAddressToAutomatedActions[msg.sender] = _allowAutomatedActions;
+    }
+
+    function setGigEarthDispatcher(DataTypes.SetDispatcherWithSigData calldata vars) external {
+        lensHub.setDispatcherWithSig(vars);
     }
 
     function unlink() external {

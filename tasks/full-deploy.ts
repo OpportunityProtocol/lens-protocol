@@ -20,7 +20,12 @@ import {
   RevertCollectModule__factory,
   TimedFeeCollectModule__factory,
   TransparentUpgradeableProxy__factory,
+  SimpleCentralizedArbitrator__factory,
+  GigEarth__factory,
+  RelationshipContentReferenceModule__factory,
+  RelationshipFollowModule__factory
 } from '../typechain-types';
+import { GigEarthInterface } from '../typechain-types/GigEarth';
 import { deployContract, waitForTx } from './helpers/utils';
 
 const TREASURY_FEE_BPS = 50;
@@ -118,6 +123,18 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     new Currency__factory(deployer).deploy({ nonce: deployerNonce++ })
   );
 
+  console.log('\n\t-- Deploying Simple Arbitrator --');
+  const simpleArbitrator = await deployContract(
+    new  SimpleCentralizedArbitrator__factory(deployer).deploy({
+      nonce: deployerNonce++,
+    })
+  );
+
+  console.log('\n\t-- Deploying GigEarth --');
+  const gigEarth = await deployContract(
+    new GigEarth__factory(deployer).deploy(deployer.address, treasuryAddress, simpleArbitrator.address, lensHub.address, { nonce: deployerNonce++ })
+  );
+
   // Deploy collect modules
   console.log('\n\t-- Deploying feeCollectModule --');
   const feeCollectModule = await deployContract(
@@ -167,10 +184,24 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     new ApprovalFollowModule__factory(deployer).deploy(lensHub.address, { nonce: deployerNonce++ })
   );
 
+  console.log('\n\t-- Deploying GigEarthFollowModule --');
+  const gigEarthFollowModule = await deployContract(
+    new   RelationshipFollowModule__factory(deployer).deploy(lensHub.address, gigEarth.address, {
+      nonce: deployerNonce++,
+    })
+  );
+
   // Deploy reference module
   console.log('\n\t-- Deploying followerOnlyReferenceModule --');
   const followerOnlyReferenceModule = await deployContract(
     new FollowerOnlyReferenceModule__factory(deployer).deploy(lensHub.address, {
+      nonce: deployerNonce++,
+    })
+  );
+
+  console.log('\n\t-- Deploying GigEarthReferenceModule --');
+  const gigEarthReferenceModule = await deployContract(
+    new RelationshipContentReferenceModule__factory(deployer).deploy(lensHub.address, moduleGlobals.address, gigEarth.address, {
       nonce: deployerNonce++,
     })
   );
@@ -209,11 +240,19 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   await waitForTx(
     lensHub.whitelistFollowModule(approvalFollowModule.address, true, { nonce: governanceNonce++ })
   );
+  await waitForTx(
+    lensHub.whitelistFollowModule(gigEarthFollowModule.address, true, { nonce: governanceNonce++ })
+  );
 
   // Whitelist the reference module
   console.log('\n\t-- Whitelisting Reference Module --');
   await waitForTx(
     lensHub.whitelistReferenceModule(followerOnlyReferenceModule.address, true, {
+      nonce: governanceNonce++,
+    })
+  );
+  await waitForTx(
+    lensHub.whitelistReferenceModule(gigEarthReferenceModule.address, true, {
       nonce: governanceNonce++,
     })
   );
@@ -226,27 +265,9 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
       .whitelistCurrency(currency.address, true, { nonce: governanceNonce++ })
   );
 
-  const centralizedArbitrator= await deployContract(
-    new SimpleCentralizedArbitrator__factory(deployer).deploy({ nonce: deployerNonce++ })
-  );
-
-  const gigEarth = await deployContract(
-    new GigEarth__factory(deployer).deploy(deployer.address, '0', centralizedArbitrator.address, lensHub.address, { nonce: deployerNonce++ })
-  );
-
-  console.log('\n\t-- Deploying GigEarthReferenceModule --');
-  const gigEarthReferenceModule = await deployContract(
-    new RelationshipContentReferenceModule__factory(deployer).deploy(lensHub.address, moduleGlobals.address, gigEarth.address, {
-      nonce: deployerNonce++,
-    })
-  );
-
-  console.log('\n\t-- Deploying GigEarthFollowModule --');
-  const gigEarthFollowModule = await deployContract(
-    new   RelationshipFollowModule__factory(deployer).deploy(lensHub.address, gigEarth.address, {
-      nonce: deployerNonce++,
-    })
-  );
+  const gigEarthInstance = await GigEarth__factory.connect(gigEarth.address, deployer)
+  await gigEarthInstance.setLensFollowModule(gigEarthFollowModule.address)
+  await gigEarthInstance.setLensContentReferenceModule(gigEarthReferenceModule.address)
 
   // Save and log the addresses
   const addrs = {
@@ -267,6 +288,10 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     'fee follow module': feeFollowModule.address,
     'approval follow module': approvalFollowModule.address,
     'follower only reference module': followerOnlyReferenceModule.address,
+    'gig earth': gigEarth.address,
+    'gig earth reference module': gigEarthReferenceModule.address,
+    'gig earth follow module': gigEarthFollowModule.address,
+    'simple arbitrator': simpleArbitrator.address
   };
   const json = JSON.stringify(addrs, null, 2);
   console.log(json);
