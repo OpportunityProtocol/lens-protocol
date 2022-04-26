@@ -1,4 +1,14 @@
 library NetworkInterface {
+    error InvalidStatus();
+    error ReleasedTooEarly();
+    error NotPayer();
+    error NotArbitrator();
+    error ThirdPartyNotAllowed();
+    error PayeeDepositStillPending();
+    error ReclaimedTooLate();
+    error InsufficientPayment(uint256 _available, uint256 _required);
+    error InvalidRuling(uint256 _ruling, uint256 _numberOfChoices);
+
     struct Relationship {
         address valuePtr;
         uint256 id;
@@ -49,7 +59,7 @@ library NetworkInterface {
         uint256 MAX_WAITLIST_SIZE;
     }
 
-        enum RulingOptions {
+    enum RulingOptions {
         PayerWins,
         PayeeWins
     }
