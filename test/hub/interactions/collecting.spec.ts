@@ -5,13 +5,14 @@ import { MAX_UINT256, ZERO_ADDRESS } from '../../helpers/constants';
 import { ERRORS } from '../../helpers/errors';
 import {
   cancelWithPermitForAll,
+  collectReturningTokenIds,
   getAbbreviation,
   getCollectWithSigParts,
   getTimestamp,
 } from '../../helpers/utils';
 import {
   lensHub,
-  emptyCollectModule,
+  freeCollectModule,
   FIRST_PROFILE_ID,
   governance,
   makeSuiteCleanRoom,
@@ -23,12 +24,14 @@ import {
   userTwo,
   userTwoAddress,
   MOCK_FOLLOW_NFT_URI,
+  abiCoder,
+  user,
 } from '../../__setup.spec';
 
 makeSuiteCleanRoom('Collecting', function () {
   beforeEach(async function () {
     await expect(
-      lensHub.connect(governance).whitelistCollectModule(emptyCollectModule.address, true)
+      lensHub.connect(governance).whitelistCollectModule(freeCollectModule.address, true)
     ).to.not.be.reverted;
     await expect(
       lensHub.createProfile({
@@ -36,7 +39,7 @@ makeSuiteCleanRoom('Collecting', function () {
         handle: MOCK_PROFILE_HANDLE,
         imageURI: MOCK_PROFILE_URI,
         followModule: ZERO_ADDRESS,
-        followModuleData: [],
+        followModuleInitData: [],
         followNFTURI: MOCK_FOLLOW_NFT_URI,
       })
     ).to.not.be.reverted;
@@ -44,10 +47,10 @@ makeSuiteCleanRoom('Collecting', function () {
       lensHub.post({
         profileId: FIRST_PROFILE_ID,
         contentURI: MOCK_URI,
-        collectModule: emptyCollectModule.address,
-        collectModuleData: [],
+        collectModule: freeCollectModule.address,
+        collectModuleInitData: abiCoder.encode(['bool'], [true]),
         referenceModule: ZERO_ADDRESS,
-        referenceModuleData: [],
+        referenceModuleInitData: [],
       })
     ).to.not.be.reverted;
   });
@@ -77,6 +80,85 @@ makeSuiteCleanRoom('Collecting', function () {
     });
 
     context('Scenarios', function () {
+      it('Collecting should work if the collector is the publication owner even when he is not following himself and follow NFT was not deployed', async function () {
+        await expect(lensHub.collect(FIRST_PROFILE_ID, 1, [])).to.not.be.reverted;
+      });
+
+      it('Collecting should work if the collector is the publication owner even when he is not following himself and follow NFT was deployed', async function () {
+        await expect(lensHub.follow([FIRST_PROFILE_ID], [[]])).to.not.be.reverted;
+        const followNFT = FollowNFT__factory.connect(
+          await lensHub.getFollowNFT(FIRST_PROFILE_ID),
+          user
+        );
+
+        await expect(followNFT.transferFrom(userAddress, userTwoAddress, 1)).to.not.be.reverted;
+
+        await expect(lensHub.collect(FIRST_PROFILE_ID, 1, [])).to.not.be.reverted;
+      });
+
+      it('Should return the expected token IDs when collecting publications', async function () {
+        await expect(lensHub.connect(userTwo).follow([FIRST_PROFILE_ID], [[]])).to.not.be.reverted;
+        await expect(
+          lensHub.connect(testWallet).follow([FIRST_PROFILE_ID], [[]])
+        ).to.not.be.reverted;
+
+        expect(
+          await collectReturningTokenIds({
+            vars: {
+              profileId: FIRST_PROFILE_ID,
+              pubId: 1,
+              data: [],
+            },
+          })
+        ).to.eq(1);
+
+        expect(
+          await collectReturningTokenIds({
+            sender: userTwo,
+            vars: {
+              profileId: FIRST_PROFILE_ID,
+              pubId: 1,
+              data: [],
+            },
+          })
+        ).to.eq(2);
+
+        const nonce = (await lensHub.sigNonces(testWallet.address)).toNumber();
+        const { v, r, s } = await getCollectWithSigParts(
+          FIRST_PROFILE_ID,
+          '1',
+          [],
+          nonce,
+          MAX_UINT256
+        );
+        expect(
+          await collectReturningTokenIds({
+            vars: {
+              collector: testWallet.address,
+              profileId: FIRST_PROFILE_ID,
+              pubId: '1',
+              data: [],
+              sig: {
+                v,
+                r,
+                s,
+                deadline: MAX_UINT256,
+              },
+            },
+          })
+        ).to.eq(3);
+
+        expect(
+          await collectReturningTokenIds({
+            vars: {
+              profileId: FIRST_PROFILE_ID,
+              pubId: 1,
+              data: [],
+            },
+          })
+        ).to.eq(4);
+      });
+
       it('UserTwo should follow, then collect, receive a collect NFT with the expected properties', async function () {
         await expect(lensHub.connect(userTwo).follow([FIRST_PROFILE_ID], [[]])).to.not.be.reverted;
         await expect(lensHub.connect(userTwo).collect(FIRST_PROFILE_ID, 1, [])).to.not.be.reverted;
@@ -116,7 +198,7 @@ makeSuiteCleanRoom('Collecting', function () {
             handle: 'mockhandle',
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.not.be.reverted;
@@ -126,8 +208,9 @@ makeSuiteCleanRoom('Collecting', function () {
             profileId: secondProfileId,
             profileIdPointed: FIRST_PROFILE_ID,
             pubIdPointed: 1,
-            referenceModule: ZERO_ADDRESS,
             referenceModuleData: [],
+            referenceModule: ZERO_ADDRESS,
+            referenceModuleInitData: [],
           })
         ).to.not.be.reverted;
 
@@ -159,7 +242,7 @@ makeSuiteCleanRoom('Collecting', function () {
             handle: 'mockhandle',
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.not.be.reverted;
@@ -169,8 +252,9 @@ makeSuiteCleanRoom('Collecting', function () {
             profileId: secondProfileId,
             profileIdPointed: FIRST_PROFILE_ID,
             pubIdPointed: 1,
-            referenceModule: ZERO_ADDRESS,
             referenceModuleData: [],
+            referenceModule: ZERO_ADDRESS,
+            referenceModuleInitData: [],
           })
         ).to.not.be.reverted;
 
@@ -179,8 +263,9 @@ makeSuiteCleanRoom('Collecting', function () {
             profileId: secondProfileId,
             profileIdPointed: secondProfileId,
             pubIdPointed: 1,
-            referenceModule: ZERO_ADDRESS,
             referenceModuleData: [],
+            referenceModule: ZERO_ADDRESS,
+            referenceModuleInitData: [],
           })
         ).to.not.be.reverted;
 
@@ -396,7 +481,7 @@ makeSuiteCleanRoom('Collecting', function () {
             handle: 'mockhandle',
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.not.be.reverted;
@@ -406,8 +491,9 @@ makeSuiteCleanRoom('Collecting', function () {
             profileId: secondProfileId,
             profileIdPointed: FIRST_PROFILE_ID,
             pubIdPointed: 1,
-            referenceModule: ZERO_ADDRESS,
             referenceModuleData: [],
+            referenceModule: ZERO_ADDRESS,
+            referenceModuleInitData: [],
           })
         ).to.not.be.reverted;
 

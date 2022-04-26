@@ -97,7 +97,7 @@ library DataTypes {
      * @param handle The handle to set for the profile, must be unique and non-empty.
      * @param imageURI The URI to set for the profile image.
      * @param followModule The follow module to use, can be the zero address.
-     * @param followModuleData The follow module initialization data, if any.
+     * @param followModuleInitData The follow module initialization data, if any.
      * @param followNFTURI The URI to use for the follow NFT.
      */
     struct CreateProfileData {
@@ -105,7 +105,7 @@ library DataTypes {
         string handle;
         string imageURI;
         address followModule;
-        bytes followModuleData;
+        bytes followModuleInitData;
         string followNFTURI;
     }
 
@@ -113,13 +113,13 @@ library DataTypes {
      * @notice A struct containing the parameters required for the `setDefaultProfileWithSig()` function. Parameters are
      * the same as the regular `setDefaultProfile()` function, with an added EIP712Signature.
      *
-     * @param profileId The token ID of the profile which will be set as default
-     * @param wallet The address of the wallet which is either the owner of the profile or address(0)
+     * @param wallet The address of the wallet setting the default profile.
+     * @param profileId The token ID of the profile which will be set as default, or zero.
      * @param sig The EIP712Signature struct containing the profile owner's signature.
      */
     struct SetDefaultProfileWithSigData {
-        uint256 profileId;
         address wallet;
+        uint256 profileId;
         EIP712Signature sig;
     }
 
@@ -129,13 +129,13 @@ library DataTypes {
      *
      * @param profileId The token ID of the profile to change the followModule for.
      * @param followModule The followModule to set for the given profile, must be whitelisted.
-     * @param followModuleData The data to be passed to the followModule for initialization.
+     * @param followModuleInitData The data to be passed to the followModule for initialization.
      * @param sig The EIP712Signature struct containing the profile owner's signature.
      */
     struct SetFollowModuleWithSigData {
         uint256 profileId;
         address followModule;
-        bytes followModuleData;
+        bytes followModuleInitData;
         EIP712Signature sig;
     }
 
@@ -187,17 +187,17 @@ library DataTypes {
      * @param profileId The token ID of the profile to publish to.
      * @param contentURI The URI to set for this new publication.
      * @param collectModule The collect module to set for this new publication.
-     * @param collectModuleData The data to pass to the collect module's initialization.
+     * @param collectModuleInitData The data to pass to the collect module's initialization.
      * @param referenceModule The reference module to set for the given publication, must be whitelisted.
-     * @param referenceModuleData The data to be passed to the reference module for initialization.
+     * @param referenceModuleInitData The data to be passed to the reference module for initialization.
      */
     struct PostData {
         uint256 profileId;
         string contentURI;
         address collectModule;
-        bytes collectModuleData;
+        bytes collectModuleInitData;
         address referenceModule;
-        bytes referenceModuleData;
+        bytes referenceModuleInitData;
     }
 
     /**
@@ -207,18 +207,18 @@ library DataTypes {
      * @param profileId The token ID of the profile to publish to.
      * @param contentURI The URI to set for this new publication.
      * @param collectModule The collectModule to set for this new publication.
-     * @param collectModuleData The data to pass to the collectModule's initialization.
+     * @param collectModuleInitData The data to pass to the collectModule's initialization.
      * @param referenceModule The reference module to set for the given publication, must be whitelisted.
-     * @param referenceModuleData The data to be passed to the reference module for initialization.
+     * @param referenceModuleInitData The data to be passed to the reference module for initialization.
      * @param sig The EIP712Signature struct containing the profile owner's signature.
      */
     struct PostWithSigData {
         uint256 profileId;
         string contentURI;
         address collectModule;
-        bytes collectModuleData;
+        bytes collectModuleInitData;
         address referenceModule;
-        bytes referenceModuleData;
+        bytes referenceModuleInitData;
         EIP712Signature sig;
     }
 
@@ -229,20 +229,22 @@ library DataTypes {
      * @param contentURI The URI to set for this new publication.
      * @param profileIdPointed The profile token ID to point the comment to.
      * @param pubIdPointed The publication ID to point the comment to.
+     * @param referenceModuleData The data passed to the reference module.
      * @param collectModule The collect module to set for this new publication.
-     * @param collectModuleData The data to pass to the collect module's initialization.
+     * @param collectModuleInitData The data to pass to the collect module's initialization.
      * @param referenceModule The reference module to set for the given publication, must be whitelisted.
-     * @param referenceModuleData The data to be passed to the reference module for initialization.
+     * @param referenceModuleInitData The data to be passed to the reference module for initialization.
      */
     struct CommentData {
         uint256 profileId;
         string contentURI;
         uint256 profileIdPointed;
         uint256 pubIdPointed;
-        address collectModule;
-        bytes collectModuleData;
-        address referenceModule;
         bytes referenceModuleData;
+        address collectModule;
+        bytes collectModuleInitData;
+        address referenceModule;
+        bytes referenceModuleInitData;
     }
 
     /**
@@ -253,10 +255,11 @@ library DataTypes {
      * @param contentURI The URI to set for this new publication.
      * @param profileIdPointed The profile token ID to point the comment to.
      * @param pubIdPointed The publication ID to point the comment to.
+     * @param referenceModuleData The data passed to the reference module.
      * @param collectModule The collectModule to set for this new publication.
-     * @param collectModuleData The data to pass to the collectModule's initialization.
+     * @param collectModuleInitData The data to pass to the collectModule's initialization.
      * @param referenceModule The reference module to set for the given publication, must be whitelisted.
-     * @param referenceModuleData The data to be passed to the reference module for initialization.
+     * @param referenceModuleInitData The data to be passed to the reference module for initialization.
      * @param sig The EIP712Signature struct containing the profile owner's signature.
      */
     struct CommentWithSigData {
@@ -264,10 +267,11 @@ library DataTypes {
         string contentURI;
         uint256 profileIdPointed;
         uint256 pubIdPointed;
-        address collectModule;
-        bytes collectModuleData;
-        address referenceModule;
         bytes referenceModuleData;
+        address collectModule;
+        bytes collectModuleInitData;
+        address referenceModule;
+        bytes referenceModuleInitData;
         EIP712Signature sig;
     }
 
@@ -277,15 +281,17 @@ library DataTypes {
      * @param profileId The token ID of the profile to publish to.
      * @param profileIdPointed The profile token ID to point the mirror to.
      * @param pubIdPointed The publication ID to point the mirror to.
+     * @param referenceModuleData The data passed to the reference module.
      * @param referenceModule The reference module to set for the given publication, must be whitelisted.
-     * @param referenceModuleData The data to be passed to the reference module for initialization.
+     * @param referenceModuleInitData The data to be passed to the reference module for initialization.
      */
     struct MirrorData {
         uint256 profileId;
         uint256 profileIdPointed;
         uint256 pubIdPointed;
-        address referenceModule;
         bytes referenceModuleData;
+        address referenceModule;
+        bytes referenceModuleInitData;
     }
 
     /**
@@ -295,16 +301,18 @@ library DataTypes {
      * @param profileId The token ID of the profile to publish to.
      * @param profileIdPointed The profile token ID to point the mirror to.
      * @param pubIdPointed The publication ID to point the mirror to.
+     * @param referenceModuleData The data passed to the reference module.
      * @param referenceModule The reference module to set for the given publication, must be whitelisted.
-     * @param referenceModuleData The data to be passed to the reference module for initialization.
+     * @param referenceModuleInitData The data to be passed to the reference module for initialization.
      * @param sig The EIP712Signature struct containing the profile owner's signature.
      */
     struct MirrorWithSigData {
         uint256 profileId;
         uint256 profileIdPointed;
         uint256 pubIdPointed;
-        address referenceModule;
         bytes referenceModuleData;
+        address referenceModule;
+        bytes referenceModuleInitData;
         EIP712Signature sig;
     }
 
@@ -339,6 +347,34 @@ library DataTypes {
         uint256 profileId;
         uint256 pubId;
         bytes data;
+        EIP712Signature sig;
+    }
+
+    /**
+     * @notice A struct containing the parameters required for the `setProfileMetadataWithSig()` function.
+     *
+     * @param profileId The profile ID for which to set the metadata.
+     * @param metadata The metadata string to set for the profile and user.
+     * @param sig The EIP712Signature struct containing the user's signature.
+     */
+    struct SetProfileMetadataWithSigData {
+        uint256 profileId;
+        string metadata;
+        EIP712Signature sig;
+    }
+
+    /**
+     * @notice A struct containing the parameters required for the `toggleFollowWithSig()` function.
+     *
+     * @param follower The follower which is the message signer.
+     * @param profileIds The token ID array of the profiles.
+     * @param enables The array of booleans to enable/disable follows.
+     * @param sig The EIP712Signature struct containing the follower's signature.
+     */
+    struct ToggleFollowWithSigData {
+        address follower;
+        uint256[] profileIds;
+        bool[] enables;
         EIP712Signature sig;
     }
 }

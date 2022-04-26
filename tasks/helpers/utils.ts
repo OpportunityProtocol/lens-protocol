@@ -3,7 +3,6 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { Contract, ContractTransaction } from 'ethers';
 import fs from 'fs';
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
-import { runtimeHRE } from '../full-deploy-verify';
 
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -36,9 +35,10 @@ export async function deployWithVerify(
 ): Promise<Contract> {
   const deployedContract = await deployContract(tx);
   let count = 0;
-  let maxTries = 7;
+  let maxTries = 8;
+  const runtimeHRE = require('hardhat');
   while (true) {
-    await delay(5000);
+    await delay(10000);
     try {
       console.log('Verifying contract at', deployedContract.address);
       await runtimeHRE.run('verify:verify', {
@@ -48,6 +48,12 @@ export async function deployWithVerify(
       });
       break;
     } catch (error) {
+      if (String(error).includes('Already Verified')) {
+        console.log(
+          `Already verified contract at ${contractPath} at address ${deployedContract.address}`
+        );
+        break;
+      }
       if (++count == maxTries) {
         console.log(
           `Failed to verify contract at ${contractPath} at address ${deployedContract.address}, error: ${error}`

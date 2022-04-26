@@ -39,35 +39,46 @@ The Lens Protocol is a decentralized, non-custodial social graph. Lens implement
 
 ## Setup
 
-The environment is built using Docker Compose, note that your `.env` file must have an `ALCHEMY_KEY` or an `INFURA_KEY` variable, and an optional `MNEMONIC` and `ETHERSCAN_KEY`, defined like so:
+> For now only Linux and macOS are known to work
+>
+> We are now figuring out what works for Windows, instructions will be updated soon
+>
+> (feel free to experiment and submit PR's)
+
+The environment is built using Docker Compose, note that your `.env` file must have the RPC URL of the network you want to use, and an optional `MNEMONIC` and `BLOCK_EXPLORER_KEY`, defined like so, assuming you choose to use Mumbai network:
 
 ```
 MNEMONIC="MNEMONIC YOU WANT TO DERIVE WALLETS FROM HERE"
-ALCHEMY_KEY="YOUR ALCHEMY KEY HERE"
-INFURA_KEY="OR YOUR INFURA KEY HERE"
-ETHERSCAN_KEY="YOUR ETHERSCAN API KEY HERE"
+MUMBAI_RPC_URL="YOUR RPC URL HERE"
+BLOCK_EXPLORER_KEY="YOUR BLOCK EXPLORER API KEY HERE"
 ```
 
 With the environment file set up, you can move on to using Docker:
 
-```
-$ sudo docker-compose up -d --build
+```bash
+export USERID=$UID && docker-compose build && docker-compose run --name lens contracts-env bash
 ```
 
-And in another terminal:
+If you need additional terminals:
 
-```
-$ sudo docker-compose exec contracts-env /bin/bash
+```bash
+docker exec -it lens bash
 ```
 
 From there, have fun!
 
 Here are a few self-explanatory scripts:
 
+```bash
+npm run test
+npm run coverage
+npm run compile
 ```
-$ npm run test
-$ npm run coverage
-$ npm run compile
+
+Cleanup leftover Docker containers:
+
+```bash
+USERID=$UID docker-compose down
 ```
 
 ## Protocol Overview

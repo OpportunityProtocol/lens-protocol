@@ -6,7 +6,7 @@ import { MockProfileCreationProxy, MockProfileCreationProxy__factory } from '../
 import {
   approvalFollowModule,
   deployer,
-  emptyCollectModule,
+  freeCollectModule,
   FIRST_PROFILE_ID,
   followerOnlyReferenceModule,
   governance,
@@ -58,7 +58,7 @@ makeSuiteCleanRoom('Mock Profile Creation Proxy', function () {
         handle: MOCK_PROFILE_HANDLE,
         imageURI: MOCK_PROFILE_URI,
         followModule: ZERO_ADDRESS,
-        followModuleData: [],
+        followModuleInitData: [],
         followNFTURI: MOCK_FOLLOW_NFT_URI,
       })
     ).to.not.be.reverted;

@@ -34,7 +34,7 @@ makeSuiteCleanRoom('Follow NFT', function () {
         handle: MOCK_PROFILE_HANDLE,
         imageURI: MOCK_PROFILE_URI,
         followModule: ZERO_ADDRESS,
-        followModuleData: [],
+        followModuleInitData: [],
         followNFTURI: MOCK_FOLLOW_NFT_URI,
       })
     ).to.not.be.reverted;
@@ -49,7 +49,7 @@ makeSuiteCleanRoom('Follow NFT', function () {
           user
         );
 
-        await expect(followNFT.initialize(FIRST_PROFILE_ID, 'NAME', 'SYMBOL')).to.be.revertedWith(
+        await expect(followNFT.initialize(FIRST_PROFILE_ID)).to.be.revertedWith(
           ERRORS.INITIALIZED
         );
       });

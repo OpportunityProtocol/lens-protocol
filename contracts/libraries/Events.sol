@@ -124,6 +124,7 @@ library Events {
      * @param followModule The profile's newly set follow module. This CAN be the zero address.
      * @param followModuleReturnData The data returned from the follow module's initialization. This is abi encoded
      * and totally depends on the follow module chosen.
+     * @param followNFTURI The URI set for the profile's follow NFT.
      * @param timestamp The current block timestamp.
      */
     event ProfileCreated(
@@ -141,11 +142,11 @@ library Events {
     /**
      * @dev Emitted when a a default profile is set for a wallet as its main identity
      *
-     * @param profileId The token ID of the profile for which the default profile is being set.
-     * @param wallet The wallet which owns this profile
+     * @param wallet The wallet which set or unset its default profile.
+     * @param profileId The token ID of the profile being set as default, or zero.
      * @param timestamp The current block timestamp.
      */
-    event DefaultProfileSet(uint256 indexed profileId, address indexed wallet, uint256 timestamp);
+    event DefaultProfileSet(address indexed wallet, uint256 indexed profileId, uint256 timestamp);
 
     /**
      * @dev Emitted when a dispatcher is set for a specific profile.
@@ -223,6 +224,7 @@ library Events {
      * @param contentURI The URI mapped to this new publication.
      * @param profileIdPointed The profile token ID that this comment points to.
      * @param pubIdPointed The publication ID that this comment points to.
+     * @param referenceModuleData The data passed to the reference module.
      * @param collectModule The collect module mapped to this new publication. This CANNOT be the zero address.
      * @param collectModuleReturnData The data returned from the collect module's initialization for this given
      * publication. This is abi encoded and totally depends on the collect module chosen.
@@ -237,6 +239,7 @@ library Events {
         string contentURI,
         uint256 profileIdPointed,
         uint256 pubIdPointed,
+        bytes referenceModuleData,
         address collectModule,
         bytes collectModuleReturnData,
         address referenceModule,
@@ -251,6 +254,7 @@ library Events {
      * @param pubId The new publication's ID.
      * @param profileIdPointed The profile token ID that this mirror points to.
      * @param pubIdPointed The publication ID that this mirror points to.
+     * @param referenceModuleData The data passed to the reference module.
      * @param referenceModule The reference module set for this publication.
      * @param referenceModuleReturnData The data returned from the reference module at initialization. This is abi
      * encoded and totally depends on the reference module chosen.
@@ -261,6 +265,7 @@ library Events {
         uint256 indexed pubId,
         uint256 profileIdPointed,
         uint256 pubIdPointed,
+        bytes referenceModuleData,
         address referenceModule,
         bytes referenceModuleReturnData,
         uint256 timestamp
@@ -302,6 +307,7 @@ library Events {
      * @param pubId The publication ID that the collect was initiated towards, useful to differentiate mirrors.
      * @param rootProfileId The profile token ID of the profile whose publication is being collected.
      * @param rootPubId The publication ID of the publication being collected.
+     * @param collectModuleData The data passed to the collect module.
      * @param timestamp The current block timestamp.
      */
     event Collected(
@@ -310,6 +316,22 @@ library Events {
         uint256 indexed pubId,
         uint256 rootProfileId,
         uint256 rootPubId,
+        bytes collectModuleData,
+        uint256 timestamp
+    );
+
+    /**
+     * @dev Emitted upon a successful follow action.
+     *
+     * @param follower The address following the given profiles.
+     * @param profileIds The token ID array of the profiles being followed.
+     * @param followModuleDatas The array of data parameters passed to each follow module.
+     * @param timestamp The current block timestamp.
+     */
+    event Followed(
+        address indexed follower,
+        uint256[] profileIds,
+        bytes[] followModuleDatas,
         uint256 timestamp
     );
 
@@ -472,6 +494,34 @@ library Events {
         uint256 indexed profileId,
         address[] addresses,
         bool[] approved,
+        uint256 timestamp
+    );
+
+    /**
+     * @dev Emitted when the user wants to enable or disable follows in the `LensPeriphery`.
+     *
+     * @param owner The profile owner who executed the toggle.
+     * @param profileIds The array of token IDs of the profiles each followNFT is associated with.
+     * @param enabled The array of whether each FollowNFT's follow is enabled/disabled.
+     * @param timestamp The current block timestamp.
+     */
+    event FollowsToggled(
+        address indexed owner,
+        uint256[] profileIds,
+        bool[] enabled,
+        uint256 timestamp
+    );
+
+    /**
+     * @dev Emitted when the metadata associated with a profile is set in the `LensPeriphery`.
+     *
+     * @param profileId The profile ID the metadata is set for.
+     * @param metadata The metadata set for the profile and user.
+     * @param timestamp The current block timestamp.
+     */
+    event ProfileMetadataSet(
+        uint256 indexed profileId,
+        string metadata,
         uint256 timestamp
     );
 }
