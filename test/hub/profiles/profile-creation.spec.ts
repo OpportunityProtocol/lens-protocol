@@ -2,9 +2,9 @@ import '@nomiclabs/hardhat-ethers';
 import { expect } from 'chai';
 import { BigNumber } from 'ethers';
 import { TokenDataStructOutput } from '../../../typechain-types/LensHub';
-import { MAX_UINT256, ZERO_ADDRESS } from '../../helpers/constants';
+import { ZERO_ADDRESS } from '../../helpers/constants';
 import { ERRORS } from '../../helpers/errors';
-import { cancelWithPermitForAll, getTimestamp } from '../../helpers/utils';
+import { createProfileReturningTokenId, getTimestamp, waitForTx } from '../../helpers/utils';
 import {
   FIRST_PROFILE_ID,
   governance,
@@ -32,7 +32,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: val,
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.be.revertedWith(ERRORS.INVALID_HANDLE_LENGTH);
@@ -45,7 +45,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: '',
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.be.revertedWith(ERRORS.INVALID_HANDLE_LENGTH);
@@ -58,7 +58,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: 'Egg',
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.be.revertedWith(ERRORS.HANDLE_CONTAINS_INVALID_CHARACTERS);
@@ -71,7 +71,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: 'egg?',
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.be.revertedWith(ERRORS.HANDLE_CONTAINS_INVALID_CHARACTERS);
@@ -84,7 +84,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: MOCK_PROFILE_HANDLE,
             imageURI: MOCK_PROFILE_URI,
             followModule: userAddress,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.be.revertedWith(ERRORS.FOLLOW_MODULE_NOT_WHITELISTED);
@@ -101,7 +101,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: MOCK_PROFILE_HANDLE,
             imageURI: MOCK_PROFILE_URI,
             followModule: mockFollowModule.address,
-            followModuleData: [0x12, 0x34],
+            followModuleInitData: [0x12, 0x34],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.be.revertedWith(ERRORS.NO_REASON_ABI_DECODE);
@@ -118,7 +118,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: MOCK_PROFILE_HANDLE,
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.be.revertedWith(ERRORS.PROFILE_CREATOR_NOT_WHITELISTED);
@@ -134,16 +134,18 @@ makeSuiteCleanRoom('Profile Creation', function () {
         let mintTimestamp: BigNumber;
         let tokenData: TokenDataStructOutput;
 
-        await expect(
-          lensHub.createProfile({
-            to: userAddress,
-            handle: MOCK_PROFILE_HANDLE,
-            imageURI: MOCK_PROFILE_URI,
-            followModule: ZERO_ADDRESS,
-            followModuleData: [],
-            followNFTURI: MOCK_FOLLOW_NFT_URI,
+        expect(
+          await createProfileReturningTokenId({
+            vars: {
+              to: userAddress,
+              handle: MOCK_PROFILE_HANDLE,
+              imageURI: MOCK_PROFILE_URI,
+              followModule: ZERO_ADDRESS,
+              followModuleInitData: [],
+              followNFTURI: MOCK_FOLLOW_NFT_URI,
+            },
           })
-        ).to.not.be.reverted;
+        ).to.eq(FIRST_PROFILE_ID);
 
         timestamp = await getTimestamp();
         owner = await lensHub.ownerOf(FIRST_PROFILE_ID);
@@ -159,21 +161,25 @@ makeSuiteCleanRoom('Profile Creation', function () {
         expect(tokenData.mintTimestamp).to.eq(timestamp);
 
         const secondProfileId = FIRST_PROFILE_ID + 1;
-        await expect(
-          lensHub.connect(userTwo).createProfile({
-            to: userTwoAddress,
-            handle: 'test',
-            imageURI: MOCK_PROFILE_URI,
-            followModule: ZERO_ADDRESS,
-            followModuleData: [],
-            followNFTURI: MOCK_FOLLOW_NFT_URI,
+        const secondProfileHandle = '2nd_profile';
+        expect(
+          await createProfileReturningTokenId({
+            sender: userTwo,
+            vars: {
+              to: userTwoAddress,
+              handle: secondProfileHandle,
+              imageURI: MOCK_PROFILE_URI,
+              followModule: ZERO_ADDRESS,
+              followModuleInitData: [],
+              followNFTURI: MOCK_FOLLOW_NFT_URI,
+            },
           })
-        ).to.not.be.reverted;
+        ).to.eq(secondProfileId);
 
         timestamp = await getTimestamp();
         owner = await lensHub.ownerOf(secondProfileId);
         totalSupply = await lensHub.totalSupply();
-        profileId = await lensHub.getProfileIdByHandle('test');
+        profileId = await lensHub.getProfileIdByHandle(secondProfileHandle);
         mintTimestamp = await lensHub.mintTimestampOf(secondProfileId);
         tokenData = await lensHub.tokenDataOf(secondProfileId);
         expect(owner).to.eq(userTwoAddress);
@@ -184,6 +190,63 @@ makeSuiteCleanRoom('Profile Creation', function () {
         expect(tokenData.mintTimestamp).to.eq(timestamp);
       });
 
+      it('Should return the expected token IDs when creating profiles', async function () {
+        expect(
+          await createProfileReturningTokenId({
+            vars: {
+              to: userAddress,
+              handle: 'token.id_1',
+              imageURI: MOCK_PROFILE_URI,
+              followModule: ZERO_ADDRESS,
+              followModuleInitData: [],
+              followNFTURI: MOCK_FOLLOW_NFT_URI,
+            },
+          })
+        ).to.eq(FIRST_PROFILE_ID);
+
+        const secondProfileId = FIRST_PROFILE_ID + 1;
+        expect(
+          await createProfileReturningTokenId({
+            sender: userTwo,
+            vars: {
+              to: userTwoAddress,
+              handle: 'token.id_2',
+              imageURI: MOCK_PROFILE_URI,
+              followModule: ZERO_ADDRESS,
+              followModuleInitData: [],
+              followNFTURI: MOCK_FOLLOW_NFT_URI,
+            },
+          })
+        ).to.eq(secondProfileId);
+
+        const thirdProfileId = secondProfileId + 1;
+        expect(
+          await createProfileReturningTokenId({
+            vars: {
+              to: userAddress,
+              handle: 'token.id_3',
+              imageURI: MOCK_PROFILE_URI,
+              followModule: ZERO_ADDRESS,
+              followModuleInitData: [],
+              followNFTURI: MOCK_FOLLOW_NFT_URI,
+            },
+          })
+        ).to.eq(thirdProfileId);
+      });
+
+      it('User should be able to create a profile with a handle including "-" and "_" characters', async function () {
+        await expect(
+          lensHub.createProfile({
+            to: userAddress,
+            handle: 'morse--__-_--code',
+            imageURI: MOCK_PROFILE_URI,
+            followModule: ZERO_ADDRESS,
+            followModuleInitData: [],
+            followNFTURI: MOCK_FOLLOW_NFT_URI,
+          })
+        ).to.not.be.reverted;
+      });
+
       it('User should be able to create a profile with a handle 16 bytes long, then fail to create with the same handle, and create again with a different handle', async function () {
         await expect(
           lensHub.createProfile({
@@ -191,7 +254,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: '123456789012345',
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.not.be.reverted;
@@ -201,7 +264,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: '123456789012345',
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.be.revertedWith(ERRORS.PROFILE_HANDLE_TAKEN);
@@ -211,7 +274,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: 'abcdefghijklmno',
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.not.be.reverted;
@@ -228,7 +291,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: MOCK_PROFILE_HANDLE,
             imageURI: MOCK_PROFILE_URI,
             followModule: mockFollowModule.address,
-            followModuleData: mockModuleData,
+            followModuleInitData: mockModuleData,
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.not.be.reverted;
@@ -241,7 +304,7 @@ makeSuiteCleanRoom('Profile Creation', function () {
             handle: MOCK_PROFILE_HANDLE,
             imageURI: MOCK_PROFILE_URI,
             followModule: ZERO_ADDRESS,
-            followModuleData: [],
+            followModuleInitData: [],
             followNFTURI: MOCK_FOLLOW_NFT_URI,
           })
         ).to.not.be.reverted;

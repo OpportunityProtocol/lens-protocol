@@ -8,8 +8,8 @@ import {ILensHub} from '../interfaces/ILensHub.sol';
 import {Errors} from '../libraries/Errors.sol';
 import {Events} from '../libraries/Events.sol';
 import {DataTypes} from '../libraries/DataTypes.sol';
+import {Constants} from '../libraries/Constants.sol';
 import {LensNFTBase} from './base/LensNFTBase.sol';
-import {IERC721Metadata} from '@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol';
 
 /**
  * @title FollowNFT
@@ -29,10 +29,9 @@ contract FollowNFT is LensNFTBase, IFollowNFT {
     address public immutable HUB;
 
     bytes32 internal constant DELEGATE_BY_SIG_TYPEHASH =
-        0xb8f190a57772800093f4e2b186099eb4f1df0ed7f5e2791e89a4a07678e0aeff;
-    // keccak256(
-    // 'DelegateBySig(address delegator,address delegatee,uint256 nonce,uint256 deadline)'
-    // );
+        keccak256(
+            'DelegateBySig(address delegator,address delegatee,uint256 nonce,uint256 deadline)'
+        );
 
     mapping(address => mapping(uint256 => Snapshot)) internal _snapshots;
     mapping(address => address) internal _delegates;
@@ -46,27 +45,27 @@ contract FollowNFT is LensNFTBase, IFollowNFT {
 
     // We create the FollowNFT with the pre-computed HUB address before deploying the hub.
     constructor(address hub) {
+        if (hub == address(0)) revert Errors.InitParamsInvalid();
         HUB = hub;
+        _initialized = true;
     }
 
     /// @inheritdoc IFollowNFT
-    function initialize(
-        uint256 profileId,
-        string calldata name,
-        string calldata symbol
-    ) external override {
+    function initialize(uint256 profileId) external override {
         if (_initialized) revert Errors.Initialized();
         _initialized = true;
         _profileId = profileId;
-        super._initialize(name, symbol);
         emit Events.FollowNFTInitialized(profileId, block.timestamp);
     }
 
     /// @inheritdoc IFollowNFT
-    function mint(address to) external override {
+    function mint(address to) external override returns (uint256) {
         if (msg.sender != HUB) revert Errors.NotHub();
-        uint256 tokenId = ++_tokenIdCounter;
-        _mint(to, tokenId);
+        unchecked {
+            uint256 tokenId = ++_tokenIdCounter;
+            _mint(to, tokenId);
+            return tokenId;
+        }
     }
 
     /// @inheritdoc IFollowNFT
@@ -80,12 +79,9 @@ contract FollowNFT is LensNFTBase, IFollowNFT {
         address delegatee,
         DataTypes.EIP712Signature calldata sig
     ) external override {
-        bytes32 digest;
         unchecked {
-            digest = keccak256(
-                abi.encodePacked(
-                    '\x19\x01',
-                    _calculateDomainSeparator(),
+            _validateRecoveredAddress(
+                _calculateDigest(
                     keccak256(
                         abi.encode(
                             DELEGATE_BY_SIG_TYPEHASH,
@@ -95,10 +91,11 @@ contract FollowNFT is LensNFTBase, IFollowNFT {
                             sig.deadline
                         )
                     )
-                )
+                ),
+                delegator,
+                sig
             );
         }
-        _validateRecoveredAddress(digest, delegator, sig);
         _delegate(delegator, delegatee);
     }
 
@@ -110,38 +107,9 @@ contract FollowNFT is LensNFTBase, IFollowNFT {
         returns (uint256)
     {
         if (blockNumber > block.number) revert Errors.BlockNumberInvalid();
-
         uint256 snapshotCount = _snapshotCount[user];
-
-        if (snapshotCount == 0) {
-            return 0; // Returning zero since this means the user never delegated and has no power
-        }
-
-        uint256 lower = 0;
-        uint256 upper = snapshotCount - 1;
-
-        // First check most recent balance
-        if (_snapshots[user][upper].blockNumber <= blockNumber) {
-            return _snapshots[user][upper].value;
-        }
-
-        // Next check implicit zero balance
-        if (_snapshots[user][lower].blockNumber > blockNumber) {
-            return 0;
-        }
-
-        while (upper > lower) {
-            uint256 center = upper - (upper - lower) / 2;
-            Snapshot memory snapshot = _snapshots[user][center];
-            if (snapshot.blockNumber == blockNumber) {
-                return snapshot.value;
-            } else if (snapshot.blockNumber < blockNumber) {
-                lower = center;
-            } else {
-                upper = center - 1;
-            }
-        }
-        return _snapshots[user][lower].value;
+        if (snapshotCount == 0) return 0; // Returning zero since this means the user never delegated and has no power
+        return _getSnapshotValueByBlockNumber(_snapshots[user], blockNumber, snapshotCount);
     }
 
     /// @inheritdoc IFollowNFT
@@ -152,38 +120,50 @@ contract FollowNFT is LensNFTBase, IFollowNFT {
         returns (uint256)
     {
         if (blockNumber > block.number) revert Errors.BlockNumberInvalid();
-
         uint256 snapshotCount = _delSupplySnapshotCount;
+        if (snapshotCount == 0) return 0; // Returning zero since this means a delegation has never occurred
+        return _getSnapshotValueByBlockNumber(_delSupplySnapshots, blockNumber, snapshotCount);
+    }
 
-        if (snapshotCount == 0) {
-            return 0; // Returning zero since this means a delegation has never occurred
-        }
+    function name() public view override returns (string memory) {
+        string memory handle = ILensHub(HUB).getHandle(_profileId);
+        return string(abi.encodePacked(handle, Constants.FOLLOW_NFT_NAME_SUFFIX));
+    }
 
-        uint256 lower = 0;
-        uint256 upper = snapshotCount - 1;
+    function symbol() public view override returns (string memory) {
+        string memory handle = ILensHub(HUB).getHandle(_profileId);
+        bytes4 firstBytes = bytes4(bytes(handle));
+        return string(abi.encodePacked(firstBytes, Constants.FOLLOW_NFT_SYMBOL_SUFFIX));
+    }
 
-        // First check most recent delegated supply
-        if (_delSupplySnapshots[upper].blockNumber <= blockNumber) {
-            return _delSupplySnapshots[upper].value;
-        }
+    function _getSnapshotValueByBlockNumber(
+        mapping(uint256 => Snapshot) storage _shots,
+        uint256 blockNumber,
+        uint256 snapshotCount
+    ) internal view returns (uint256) {
+        unchecked {
+            uint256 lower = 0;
+            uint256 upper = snapshotCount - 1;
 
-        // Next check implicit zero balance
-        if (_delSupplySnapshots[lower].blockNumber > blockNumber) {
-            return 0;
-        }
+            // First check most recent snapshot
+            if (_shots[upper].blockNumber <= blockNumber) return _shots[upper].value;
 
-        while (upper > lower) {
-            uint256 center = upper - (upper - lower) / 2;
-            Snapshot memory snapshot = _delSupplySnapshots[center];
-            if (snapshot.blockNumber == blockNumber) {
-                return snapshot.value;
-            } else if (snapshot.blockNumber < blockNumber) {
-                lower = center;
-            } else {
-                upper = center - 1;
+            // Next check implicit zero balance
+            if (_shots[lower].blockNumber > blockNumber) return 0;
+
+            while (upper > lower) {
+                uint256 center = upper - (upper - lower) / 2;
+                Snapshot memory snapshot = _shots[center];
+                if (snapshot.blockNumber == blockNumber) {
+                    return snapshot.value;
+                } else if (snapshot.blockNumber < blockNumber) {
+                    lower = center;
+                } else {
+                    upper = center - 1;
+                }
             }
+            return _shots[lower].value;
         }
-        return _delSupplySnapshots[lower].value;
     }
 
     /**
@@ -203,7 +183,7 @@ contract FollowNFT is LensNFTBase, IFollowNFT {
         uint256 tokenId
     ) internal override {
         address fromDelegatee = _delegates[from];
-        address toDelegatee =  _delegates[to];
+        address toDelegatee = _delegates[to];
         address followModule = ILensHub(HUB).getFollowModule(_profileId);
 
         _moveDelegate(fromDelegatee, toDelegatee, 1);
@@ -228,7 +208,8 @@ contract FollowNFT is LensNFTBase, IFollowNFT {
         uint256 amount
     ) internal {
         unchecked {
-            if (from != address(0)) {
+            bool fromZero = from == address(0);
+            if (!fromZero) {
                 uint256 fromSnapshotCount = _snapshotCount[from];
 
                 // Underflow is impossible since, if from != address(0), then a delegation must have occurred (at least 1 snapshot)
@@ -241,7 +222,7 @@ contract FollowNFT is LensNFTBase, IFollowNFT {
 
             if (to != address(0)) {
                 // if from == address(0) then this is an initial delegation (add amount to supply)
-                if (from == address(0)) {
+                if (fromZero) {
                     // It is expected behavior that the `previousDelSupply` underflows upon the first delegation,
                     // returning the expected value of zero
                     uint256 delSupplySnapshotCount = _delSupplySnapshotCount;
@@ -261,7 +242,7 @@ contract FollowNFT is LensNFTBase, IFollowNFT {
             } else {
                 // If from != address(0) then this is removing a delegation, otherwise we're dealing with a
                 // non-delegated burn of tokens and don't need to take any action
-                if (from != address(0)) {
+                if (!fromZero) {
                     // Upon removing delegation (from != address(0) && to == address(0)), supply calculations cannot
                     // underflow because if from != address(0), then a delegation must have previously occurred, so
                     // the snapshot count must be >= 1 and the previous delegated supply must be >= amount

@@ -95,17 +95,16 @@ interface ILensHub {
      *      handle: The handle to set for the profile, must be unique and non-empty.
      *      imageURI: The URI to set for the profile image.
      *      followModule: The follow module to use, can be the zero address.
-     *      followModuleData: The follow module initialization data, if any
+     *      followModuleInitData: The follow module initialization data, if any.
      */
-    function createProfile(DataTypes.CreateProfileData calldata vars) external;
+    function createProfile(DataTypes.CreateProfileData calldata vars) external returns (uint256);
 
     /**
-     * @notice Sets the mapping between wallet and its main profile identity
+     * @notice Sets the mapping between wallet and its main profile identity.
      *
-     * @param profileId The token ID of the profile to set as the main profile identity
-     * @param wallet The address of the wallet which is either the owner of the profile or address(0)
+     * @param profileId The token ID of the profile to set as the main profile identity.
      */
-    function setDefaultProfile(uint256 profileId, address wallet) external;
+    function setDefaultProfile(uint256 profileId) external;
 
     /**
      * @notice Sets the mapping between wallet and its main profile identity via signature with the specified parameters.
@@ -120,12 +119,12 @@ interface ILensHub {
      *
      * @param profileId The token ID of the profile to set the follow module for.
      * @param followModule The follow module to set for the given profile, must be whitelisted.
-     * @param followModuleData The data to be passed to the follow module for initialization.
+     * @param followModuleInitData The data to be passed to the follow module for initialization.
      */
     function setFollowModule(
         uint256 profileId,
         address followModule,
-        bytes calldata followModuleData
+        bytes calldata followModuleInitData
     ) external;
 
     /**
@@ -185,44 +184,55 @@ interface ILensHub {
      * @notice Publishes a post to a given profile, must be called by the profile owner.
      *
      * @param vars A PostData struct containing the needed parameters.
+     *
+     * @return uint256 An integer representing the post's publication ID.
      */
-    function post(DataTypes.PostData calldata vars) external;
+    function post(DataTypes.PostData calldata vars) external returns (uint256);
 
     /**
      * @notice Publishes a post to a given profile via signature with the specified parameters.
      *
      * @param vars A PostWithSigData struct containing the regular parameters and an EIP712Signature struct.
+     *
+     * @return uint256 An integer representing the post's publication ID.
      */
-    function postWithSig(DataTypes.PostWithSigData calldata vars) external;
+    function postWithSig(DataTypes.PostWithSigData calldata vars) external returns (uint256);
 
     /**
      * @notice Publishes a comment to a given profile, must be called by the profile owner.
      *
      * @param vars A CommentData struct containing the needed parameters.
+     *
+     * @return uint256 An integer representing the comment's publication ID.
      */
-    function comment(DataTypes.CommentData calldata vars) external;
+    function comment(DataTypes.CommentData calldata vars) external returns (uint256);
 
     /**
      * @notice Publishes a comment to a given profile via signature with the specified parameters.
      *
-     *@param vars A CommentWithSigData struct containing the regular parameters and an EIP712Signature struct.
+     * @param vars A CommentWithSigData struct containing the regular parameters and an EIP712Signature struct.
      *
+     * @return uint256 An integer representing the comment's publication ID.
      */
-    function commentWithSig(DataTypes.CommentWithSigData calldata vars) external;
+    function commentWithSig(DataTypes.CommentWithSigData calldata vars) external returns (uint256);
 
     /**
      * @notice Publishes a mirror to a given profile, must be called by the profile owner.
      *
      * @param vars A MirrorData struct containing the necessary parameters.
+     *
+     * @return uint256 An integer representing the mirror's publication ID.
      */
-    function mirror(DataTypes.MirrorData calldata vars) external;
+    function mirror(DataTypes.MirrorData calldata vars) external returns (uint256);
 
     /**
      * @notice Publishes a mirror to a given profile via signature with the specified parameters.
      *
      * @param vars A MirrorWithSigData struct containing the regular parameters and an EIP712Signature struct.
+     *
+     * @return uint256 An integer representing the mirror's publication ID.
      */
-    function mirrorWithSig(DataTypes.MirrorWithSigData calldata vars) external;
+    function mirrorWithSig(DataTypes.MirrorWithSigData calldata vars) external returns (uint256);
 
     /**
      * @notice Follows the given profiles, executing each profile's follow module logic (if any) and minting followNFTs to the caller.
@@ -231,16 +241,24 @@ interface ILensHub {
      *
      * @param profileIds The token ID array of the profiles to follow.
      * @param datas The arbitrary data array to pass to the follow module for each profile if needed.
+     *
+     * @return uint256[] An array of integers representing the minted follow NFTs token IDs.
      */
-    function follow(uint256[] calldata profileIds, bytes[] calldata datas) external;
+    function follow(uint256[] calldata profileIds, bytes[] calldata datas)
+        external
+        returns (uint256[] memory);
 
     /**
      * @notice Follows a given profile via signature with the specified parameters.
      *
      * @param vars A FollowWithSigData struct containing the regular parameters as well as the signing follower's address
      * and an EIP712Signature struct.
+     *
+     * @return uint256[] An array of integers representing the minted follow NFTs token IDs.
      */
-    function followWithSig(DataTypes.FollowWithSigData calldata vars) external;
+    function followWithSig(DataTypes.FollowWithSigData calldata vars)
+        external
+        returns (uint256[] memory);
 
     /**
      * @notice Collects a given publication, executing collect module logic and minting a collectNFT to the caller.
@@ -248,20 +266,24 @@ interface ILensHub {
      * @param profileId The token ID of the profile that published the publication to collect.
      * @param pubId The publication to collect's publication ID.
      * @param data The arbitrary data to pass to the collect module if needed.
+     *
+     * @return uint256 An integer representing the minted token ID.
      */
     function collect(
         uint256 profileId,
         uint256 pubId,
         bytes calldata data
-    ) external;
+    ) external returns (uint256);
 
     /**
      * @notice Collects a given publication via signature with the specified parameters.
      *
      * @param vars A CollectWithSigData struct containing the regular parameters as well as the collector's address and
      * an EIP712Signature struct.
+     *
+     * @return uint256 An integer representing the minted token ID.
      */
-    function collectWithSig(DataTypes.CollectWithSigData calldata vars) external;
+    function collectWithSig(DataTypes.CollectWithSigData calldata vars) external returns (uint256);
 
     /**
      * @dev Helper function to emit a detailed followNFT transfer event from the hub, to be consumed by frontends to track
@@ -306,7 +328,7 @@ interface ILensHub {
      *
      * @param profileCreator The address of the profile creator to check.
      *
-     * @return A boolean, true if the profile creator is whitelisted.
+     * @return bool True if the profile creator is whitelisted, false otherwise.
      */
     function isProfileCreatorWhitelisted(address profileCreator) external view returns (bool);
 
@@ -315,7 +337,7 @@ interface ILensHub {
      *
      * @param wallet The address to find the default mapping
      *
-     * @return A uint256 profile id will be 0 if not mapped
+     * @return uint256 The default profile id, which will be 0 if not mapped.
      */
     function defaultProfile(address wallet) external view returns (uint256);
 
@@ -324,7 +346,7 @@ interface ILensHub {
      *
      * @param followModule The address of the follow module to check.
      *
-     * @return A boolean, true if the the follow module is whitelisted.
+     * @return bool True if the the follow module is whitelisted, false otherwise.
      */
     function isFollowModuleWhitelisted(address followModule) external view returns (bool);
 
@@ -333,7 +355,7 @@ interface ILensHub {
      *
      * @param referenceModule The address of the reference module to check.
      *
-     * @return A boolean, true if the the reference module is whitelisted.
+     * @return bool True if the the reference module is whitelisted, false otherwise.
      */
     function isReferenceModuleWhitelisted(address referenceModule) external view returns (bool);
 
@@ -342,14 +364,14 @@ interface ILensHub {
      *
      * @param collectModule The address of the collect module to check.
      *
-     * @return A boolean, true if the the collect module is whitelisted.
+     * @return bool True if the the collect module is whitelisted, false otherwise.
      */
     function isCollectModuleWhitelisted(address collectModule) external view returns (bool);
 
     /**
      * @notice Returns the currently configured governance address.
      *
-     * @return The address of the currently configured governance.
+     * @return address The address of the currently configured governance.
      */
     function getGovernance() external view returns (address);
 
@@ -358,7 +380,7 @@ interface ILensHub {
      *
      * @param profileId The token ID of the profile to query the dispatcher for.
      *
-     * @return The dispatcher address associated with the profile.
+     * @return address The dispatcher address associated with the profile.
      */
     function getDispatcher(uint256 profileId) external view returns (address);
 
@@ -367,7 +389,7 @@ interface ILensHub {
      *
      * @param profileId The token ID of the profile to query.
      *
-     * @return The number of publications associated with the queried profile.
+     * @return uint256 The number of publications associated with the queried profile.
      */
     function getPubCount(uint256 profileId) external view returns (uint256);
 
@@ -376,7 +398,7 @@ interface ILensHub {
      *
      * @param profileId The token ID of the profile to query the followNFT for.
      *
-     * @return The followNFT associated with the given profile.
+     * @return address The followNFT associated with the given profile.
      */
     function getFollowNFT(uint256 profileId) external view returns (address);
 
@@ -385,7 +407,7 @@ interface ILensHub {
      *
      * @param profileId The token ID of the profile to query the followNFT URI for.
      *
-     * @return The followNFT URI associated with the given profile.
+     * @return string The followNFT URI associated with the given profile.
      */
     function getFollowNFTURI(uint256 profileId) external view returns (string memory);
 
@@ -395,7 +417,7 @@ interface ILensHub {
      * @param profileId The token ID of the profile that published the publication to query.
      * @param pubId The publication ID of the publication to query.
      *
-     * @return The address of the collectNFT associated with the queried publication.
+     * @return address The address of the collectNFT associated with the queried publication.
      */
     function getCollectNFT(uint256 profileId, uint256 pubId) external view returns (address);
 
@@ -404,7 +426,7 @@ interface ILensHub {
      *
      * @param profileId The token ID of the profile to query the follow module for.
      *
-     * @return The address of the follow module associated with the given profile.
+     * @return address The address of the follow module associated with the given profile.
      */
     function getFollowModule(uint256 profileId) external view returns (address);
 
@@ -414,7 +436,7 @@ interface ILensHub {
      * @param profileId The token ID of the profile that published the publication to query.
      * @param pubId The publication ID of the publication to query.
      *
-     * @return The address of the collect module associated with the queried publication.
+     * @return address The address of the collect module associated with the queried publication.
      */
     function getCollectModule(uint256 profileId, uint256 pubId) external view returns (address);
 
@@ -424,7 +446,7 @@ interface ILensHub {
      * @param profileId The token ID of the profile that published the publication to querythe reference module for.
      * @param pubId The publication ID of the publication to query the reference module for.
      *
-     * @return The address of the reference module associated with the given profile.
+     * @return address The address of the reference module associated with the given profile.
      */
     function getReferenceModule(uint256 profileId, uint256 pubId) external view returns (address);
 
@@ -433,7 +455,7 @@ interface ILensHub {
      *
      * @param profileId The token ID of the profile to query the handle for.
      *
-     * @return The handle associated with the profile.
+     * @return string The handle associated with the profile.
      */
     function getHandle(uint256 profileId) external view returns (string memory);
 
@@ -443,9 +465,8 @@ interface ILensHub {
      * @param profileId The token ID of the profile that published the publication to query the pointer for.
      * @param pubId The publication ID of the publication to query the pointer for.
      *
-     * @return
-     *          First, the profile ID of the profile the current publication is pointing to.
-     *          Second, the publication ID of the publication the current publication is pointing to.
+     * @return tuple First, the profile ID of the profile the current publication is pointing to, second, the
+     * publication ID of the publication the current publication is pointing to.
      */
     function getPubPointer(uint256 profileId, uint256 pubId)
         external
@@ -458,7 +479,7 @@ interface ILensHub {
      * @param profileId The token ID of the profile that published the publication to query.
      * @param pubId The publication ID of the publication to query.
      *
-     * @return The URI associated with a given publication.
+     * @return string The URI associated with a given publication.
      */
     function getContentURI(uint256 profileId, uint256 pubId) external view returns (string memory);
 
@@ -467,7 +488,7 @@ interface ILensHub {
      *
      * @param handle The handle to resolve the profile token ID with.
      *
-     * @return The profile ID the passed handle points to.
+     * @return uint256 The profile ID the passed handle points to.
      */
     function getProfileIdByHandle(string calldata handle) external view returns (uint256);
 
@@ -475,6 +496,8 @@ interface ILensHub {
      * @notice Returns the full profile struct associated with a given profile token ID.
      *
      * @param profileId The token ID of the profile to query.
+     *
+     * @return ProfileStruct The profile struct of the given profile.
      */
     function getProfile(uint256 profileId) external view returns (DataTypes.ProfileStruct memory);
 
@@ -484,7 +507,7 @@ interface ILensHub {
      * @param profileId The token ID of the profile that published the publication to query.
      * @param pubId The publication ID of the publication to query.
      *
-     * @return The PublicationStruct associated with the queried publication.
+     * @return PublicationStruct The publication struct associated with the queried publication.
      */
     function getPub(uint256 profileId, uint256 pubId)
         external
@@ -497,7 +520,22 @@ interface ILensHub {
      * @param profileId The token ID of the profile that published the publication to query.
      * @param pubId The publication ID of the publication to query.
      *
-     * @return The publication type, as a member of an enum (either "post," "comment" or "mirror").
+     * @return PubType The publication type, as a member of an enum (either "post," "comment" or "mirror").
      */
     function getPubType(uint256 profileId, uint256 pubId) external view returns (DataTypes.PubType);
+
+    /**
+     * @notice Returns the follow NFT implementation address.
+     *
+     * @return address The follow NFT implementation address.
+     */
+    function getFollowNFTImpl() external view returns (address);
+
+    /**
+     * @notice Returns the collect NFT implementation address.
+     *
+     * @return address The collect NFT implementation address.
+     */
+    function getCollectNFTImpl() external view returns (address);
+
 }

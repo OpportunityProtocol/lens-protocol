@@ -11,8 +11,8 @@ import {
   CollectNFT__factory,
   Currency,
   Currency__factory,
-  EmptyCollectModule,
-  EmptyCollectModule__factory,
+  FreeCollectModule,
+  FreeCollectModule__factory,
   Events,
   Events__factory,
   FeeCollectModule,
@@ -38,6 +38,7 @@ import {
   MockReferenceModule__factory,
   ModuleGlobals,
   ModuleGlobals__factory,
+  ProfileTokenURILogic__factory,
   PublishingLogic__factory,
   RelationshipContentReferenceModule,
   RelationshipFollowModule,
@@ -50,7 +51,11 @@ import {
   RelationshipFollowModule__factory,
   RelationshipContentReferenceModule__factory,
   GigEarth__factory,
-  SimpleCentralizedArbitrator__factory
+  SimpleCentralizedArbitrator__factory,
+  LensPeriphery,
+  LensPeriphery__factory,
+  ProfileFollowModule,
+  ProfileFollowModule__factory,
 } from '../typechain-types';
 import { LensHubLibraryAddresses } from '../typechain-types/factories/LensHub__factory';
 import { FAKE_PRIVATEKEY, ZERO_ADDRESS } from './helpers/constants';
@@ -67,27 +72,29 @@ export const CURRENCY_MINT_AMOUNT = parseEther('100');
 export const BPS_MAX = 10000;
 export const TREASURY_FEE_BPS = 50;
 export const REFERRAL_FEE_BPS = 250;
-export const LENS_HUB_NFT_NAME = 'Lens Profiles';
-export const LENS_HUB_NFT_SYMBOL = 'LENS';
+export const MAX_PROFILE_IMAGE_URI_LENGTH = 6000;
+export const LENS_HUB_NFT_NAME = 'Lens Protocol Profiles';
+export const LENS_HUB_NFT_SYMBOL = 'LPP';
 export const MOCK_PROFILE_HANDLE = 'plant1ghost.eth';
+export const LENS_PERIPHERY_NAME = 'LensPeriphery';
 export const FIRST_PROFILE_ID = 1;
-export const MOCK_URI =
-  'https://ipfs.fleek.co/ipfs/plantghostplantghostplantghostplantghostplantghostplantghos';
-export const OTHER_MOCK_URI =
-  'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan';
+export const MOCK_URI = 'https://ipfs.io/ipfs/QmbWqxBEKC3P8tqsKc98xmWNzrzDtRLMiMPL8wBuTGsMnR';
+export const OTHER_MOCK_URI = 'https://ipfs.io/ipfs/QmSfyMcnh1wnJHrAWCBjZHapTS859oNSsuDFiAPPdAHgHP';
 export const MOCK_PROFILE_URI =
-  'https://ipfs.fleek.co/ipfs/runningoutofthingstowriterunningoutofthingstowriterunningou';
+  'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu';
 export const MOCK_FOLLOW_NFT_URI =
-  'https://ipfs.fleek.co/ipfs/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan';
 
 export let accounts: Signer[];
 export let deployer: Signer;
 export let user: Signer;
 export let userTwo: Signer;
+export let userThree: Signer;
 export let governance: Signer;
 export let deployerAddress: string;
 export let userAddress: string;
 export let userTwoAddress: string;
+export let userThreeAddress: string;
 export let governanceAddress: string;
 export let followNFTImplAddress: string;
 export let collectNFTImplAddress: string;
@@ -104,13 +111,14 @@ export let moduleGlobals: ModuleGlobals;
 export let helper: Helper;
 export let gigEarthGovernance : Signer;
 export let gigEarthTreasury: Signer;
+export let lensPeriphery: LensPeriphery;
 
 /* Modules */
 
 // Collect
 export let feeCollectModule: FeeCollectModule;
 export let timedFeeCollectModule: TimedFeeCollectModule;
-export let emptyCollectModule: EmptyCollectModule;
+export let freeCollectModule: FreeCollectModule;
 export let revertCollectModule: RevertCollectModule;
 export let limitedFeeCollectModule: LimitedFeeCollectModule;
 export let limitedTimedFeeCollectModule: LimitedTimedFeeCollectModule;
@@ -119,6 +127,7 @@ export let simpleArbitrator : SimpleCentralizedArbitrator
 
 // Follow
 export let approvalFollowModule: ApprovalFollowModule;
+export let profileFollowModule: ProfileFollowModule;
 export let feeFollowModule: FeeFollowModule;
 export let mockFollowModule: MockFollowModule;
 export let relationshipFollowModule: RelationshipFollowModule
@@ -147,12 +156,15 @@ before(async function () {
   deployer = accounts[0];
   user = accounts[1];
   userTwo = accounts[2];
+  userThree = accounts[4];
   governance = accounts[3];
   gigEarthGovernance = accounts[4]
   gigEarthTreasury = accounts[5]
+
   deployerAddress = await deployer.getAddress();
   userAddress = await user.getAddress();
   userTwoAddress = await userTwo.getAddress();
+  userThreeAddress = await userThree.getAddress();
   governanceAddress = await governance.getAddress();
   treasuryAddress = await accounts[4].getAddress();
   mockModuleData = abiCoder.encode(['uint256'], [1]);
@@ -165,9 +177,12 @@ before(async function () {
   );
   const publishingLogic = await new PublishingLogic__factory(deployer).deploy();
   const interactionLogic = await new InteractionLogic__factory(deployer).deploy();
+  const profileTokenURILogic = await new ProfileTokenURILogic__factory(deployer).deploy();
   hubLibs = {
     'contracts/libraries/PublishingLogic.sol:PublishingLogic': publishingLogic.address,
     'contracts/libraries/InteractionLogic.sol:InteractionLogic': interactionLogic.address,
+    'contracts/libraries/ProfileTokenURILogic.sol:ProfileTokenURILogic':
+      profileTokenURILogic.address,
   };
 
   // Here, we pre-compute the nonces and addresses used to deploy the contracts.
@@ -209,11 +224,15 @@ before(async function () {
   await gigEarth.connect(gigEarthGovernance).setLensContentReferenceModule(relationshipReferenceModule.address)
   await gigEarth.connect(gigEarthGovernance).setLensFollowModule(relationshipFollowModule.address)
 
+  // LensPeriphery
+  lensPeriphery = await new LensPeriphery__factory(deployer).deploy(lensHub.address);
+  lensPeriphery = lensPeriphery.connect(user);
+
   // Currency
   currency = await new Currency__factory(deployer).deploy();
 
   // Modules
-  emptyCollectModule = await new EmptyCollectModule__factory(deployer).deploy(lensHub.address);
+  freeCollectModule = await new FreeCollectModule__factory(deployer).deploy(lensHub.address);
   revertCollectModule = await new RevertCollectModule__factory(deployer).deploy();
   feeCollectModule = await new FeeCollectModule__factory(deployer).deploy(
     lensHub.address,
@@ -236,6 +255,7 @@ before(async function () {
     lensHub.address,
     moduleGlobals.address
   );
+  profileFollowModule = await new ProfileFollowModule__factory(deployer).deploy(lensHub.address);
   approvalFollowModule = await new ApprovalFollowModule__factory(deployer).deploy(lensHub.address);
   followerOnlyReferenceModule = await new FollowerOnlyReferenceModule__factory(deployer).deploy(
     lensHub.address
@@ -250,6 +270,9 @@ before(async function () {
   ).to.not.be.reverted;
   await expect(
     lensHub.connect(governance).whitelistProfileCreator(userTwoAddress, true)
+  ).to.not.be.reverted;
+  await expect(
+    lensHub.connect(governance).whitelistProfileCreator(userThreeAddress, true)
   ).to.not.be.reverted;
   await expect(
     lensHub.connect(governance).whitelistProfileCreator(testWallet.address, true)

@@ -20,14 +20,17 @@ library Errors {
     error ProfileCreatorNotWhitelisted();
     error NotProfileOwner();
     error NotProfileOwnerOrDispatcher();
+    error NotDispatcher();
     error PublicationDoesNotExist();
     error HandleTaken();
     error HandleLengthInvalid();
     error HandleContainsInvalidCharacters();
+    error ProfileImageURILengthInvalid();
     error CallerNotFollowNFT();
     error CallerNotCollectNFT();
     error BlockNumberInvalid();
     error ArrayMismatch();
+    error CannotCommentOnSelf();
 
     // Module Errors
     error InitParamsInvalid();

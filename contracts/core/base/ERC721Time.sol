@@ -2,13 +2,13 @@
 
 pragma solidity ^0.8.0;
 
+import './IERC721Time.sol';
 import '@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol';
 import '@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol';
 import '@openzeppelin/contracts/utils/Address.sol';
 import '@openzeppelin/contracts/utils/Context.sol';
 import '@openzeppelin/contracts/utils/Strings.sol';
 import '@openzeppelin/contracts/utils/introspection/ERC165.sol';
-import './IERC721Time.sol';
 
 /**
  * @dev Implementation of https://eips.ethereum.org/EIPS/eip-721[ERC721] Non-Fungible Token Standard, including
@@ -108,6 +108,13 @@ abstract contract ERC721Time is Context, ERC165, IERC721Time, IERC721Metadata {
     {
         require(_exists(tokenId), 'ERC721: token data query for nonexistent token');
         return _tokenData[tokenId];
+    }
+
+    /**
+     * @dev See {IERC721Time-exists}
+     */
+    function exists(uint256 tokenId) public view virtual override returns (bool) {
+        return _exists(tokenId);
     }
 
     /**
@@ -433,7 +440,7 @@ abstract contract ERC721Time is Context, ERC165, IERC721Time, IERC721Metadata {
     }
 
     /**
-     * @dev Internal function to invoke {IERC721Receiver-onERC721Received} on a target address.
+     * @dev Private function to invoke {IERC721Receiver-onERC721Received} on a target address.
      * The call is not executed if the target address is not a contract.
      *
      * @param from address representing the previous owner of the given token ID
