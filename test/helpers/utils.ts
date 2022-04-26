@@ -805,6 +805,7 @@ async function getSig(msgParams: {
 }
 
 function domain(): { name: string; version: string; chainId: number; verifyingContract: string } {
+  console.log(getChainId())
   return {
     name: LENS_HUB_NFT_NAME,
     version: '1',

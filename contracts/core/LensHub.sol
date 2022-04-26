@@ -13,6 +13,7 @@ import {LensNFTBase} from './base/LensNFTBase.sol';
 import {LensMultiState} from './base/LensMultiState.sol';
 import {LensHubStorage} from './storage/LensHubStorage.sol';
 import {VersionedInitializable} from '../upgradeability/VersionedInitializable.sol';
+import "hardhat/console.sol";
 
 /**
  * @title LensHub
@@ -146,6 +147,7 @@ contract LensHub is ILensHub, LensNFTBase, VersionedInitializable, LensMultiStat
         onlyWhitelistedProfileCreator
     {
         uint256 profileId = ++_profileCounter;
+        console.log(profileId);
         _mint(vars.to, profileId);
         PublishingLogic.createProfile(
             vars,

@@ -8,11 +8,34 @@ import "../libraries/DataTypes.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import { 
+    Relationship, 
+    Market, 
+    UserSummary, 
+    RelationshipEscrowDetails, 
+    Service, 
+    RulingOptions, 
+    EscrowStatus, 
+    Persona, 
+    ContractOwnership, 
+    ContractStatus, 
+    ContractPayout,
+    InvalidStatus,
+    ReleasedTooEarly,
+    NotPayer,
+    NotArbitrator,
+    ThirdPartyNotAllowed,
+    PayeeDepositStillDepending,
+    RelcaimedTooLate,
+    InsufficientPayment,
+    InvalidRuling
+} from '../libraries/NetworkInterface.sol';
+
 interface IContentReferenceModule {
     function getPubIdByRelationship(uint256 _id) external view returns(uint256);
 }
 
-contract GigEarth is IArbitrable, IEvidence {
+contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
     /**
      */
     event UserRegistered(address indexed universalAddress);
@@ -45,100 +68,6 @@ contract GigEarth is IArbitrable, IEvidence {
      */
     event ContractOwnershipUpdate();
 
-    error InvalidStatus();
-    error ReleasedTooEarly();
-    error NotPayer();
-    error NotArbitrator();
-    error ThirdPartyNotAllowed();
-    error PayeeDepositStillPending();
-    error ReclaimedTooLate();
-    error InsufficientPayment(uint256 _available, uint256 _required);
-    error InvalidRuling(uint256 _ruling, uint256 _numberOfChoices);
-
-    struct Relationship {
-        address valuePtr;
-        uint256 id;
-        uint256 marketPtr;
-        address employer;
-        address worker;
-        string taskMetadataPtr;
-        ContractStatus contractStatus;
-        ContractOwnership contractOwnership;
-        ContractPayoutType contractPayoutType;
-        uint256 wad;
-        uint256 acceptanceTimestamp;
-        uint256 resolutionTimestamp;
-        uint256 satisfactoryScore;
-        string solutionMetadataPtr;
-    }
-    struct Market {
-        string marketName;
-        uint256 marketID;
-        uint256[] relationships;
-        address valuePtr;
-    }
-
-    struct UserSummary {
-        uint256 lensProfileID;
-        uint256 registrationTimestamp;
-        address trueIdentification;
-        bool isRegistered;
-        uint256 referenceFee;
-    }
-
-    enum RulingOptions {
-        PayerWins,
-        PayeeWins
-    }
-
-    enum EscrowStatus {
-        Initial,
-        Reclaimed,
-        Disputed,
-        Resolved
-    }
-
-        enum Persona {
-        Employer,
-        Worker
-    }
-
-    /**
-     * @dev Enum representing the states ownership for a relationship
-     */
-    enum ContractOwnership {
-        Unclaimed,
-        Pending,
-        Claimed
-    }
-
-    /**
-     * @dev Enum representing the states ownership for a relationship
-     */
-    enum ContractStatus {
-        AwaitingWorker,
-        AwaitingWorkerApproval,
-        AwaitingResolution,
-        Resolved,
-        PendingDispute,
-        Disputed
-    }
-
-    enum ContractPayoutType {
-        Flat,
-        Milestone
-    }
-
-    struct RelationshipEscrowDetails {
-        EscrowStatus status;
-        uint256 valuePtr;
-        uint256 disputeID;
-        uint256 createdAt;
-        uint256 reclaimedAt;
-        uint256 payerFeeDeposit;
-        uint256 payeeFeeDeposit;
-    }
-
     UserSummary[] private userSummaries;
     Market[] public markets;
     IArbitrator immutable arbitrator;
@@ -154,7 +83,8 @@ contract GigEarth is IArbitrable, IEvidence {
     address LENS_FOLLOW_MODULE;
     address LENS_CONTENT_REFERENCE_MODULE;
     
-    mapping(address => UserSummary) private universalAddressToSummary;
+    mapping(address => address) private universalAddressToSummaryAddress;
+    mapping(address => UserSummary) public universalAddressToUserSummary;
     mapping(uint256 => UserSummary) private lensProfileIdToSummary;
     mapping(uint256 => Market) public marketIDToMarket;
     mapping(uint256 => Relationship)
@@ -165,6 +95,11 @@ contract GigEarth is IArbitrable, IEvidence {
     mapping(uint256 => uint256) public disputeIDtoRelationshipID;
     mapping(uint256 => RelationshipEscrowDetails) public relationshipIDToEscrowDetails;
     mapping(address => bool) public universalAddressToAutomatedActions;
+
+    Service[] public services;
+    mapping(uint256 => Service) public serviceIdToService;
+    mapping(uint256 => address[]) public serviceIdToWaitlist; //waitlist for a given service id
+    mapping(uint256 => uint256) public serviceIdToMaxWaitlistSize;
 
     modifier onlyGovernance() {
         require(msg.sender == governance);
@@ -190,13 +125,163 @@ contract GigEarth is IArbitrable, IEvidence {
         lensHub = ILensHub(_lensHub);
     }
 
-    function setLensFollowModule(address _LENS_FOLLOW_MODULE) external onlyGovernance {
-        LENS_FOLLOW_MODULE = _LENS_FOLLOW_MODULE;
+    ///////////////////////////////////////////// User
+
+    /**
+     * Register as a worker
+     * @param vars LensProtocol profile data struct
+     * @return Returns The user's GigEarth id
+     */
+    function registerWorker(DataTypes.CreateProfileData calldata vars) external returns(uint256) {
+        //check if the user is alredy registered
+        if (_isRegisteredUser(msg.sender)) {
+            revert();
+        }   
+
+        //create lens hub profile
+        lensHub.createProfile(vars);
+        uint256 lensProfileId = lensHub.getProfileIdByHandle(vars.handle);
+
+        //create and store user summary
+        universalAddressToSummaryAddress[msg.sender] = new address(UserSummary(msg.sender, lensProfileId, vars.contentUri)); //_createUserSummary(msg.sender, lensProfileId);
+    
+        emit UserRegistered(msg.sender);
     }
 
-    function setLensContentReferenceModule(address _LENS_CONTENT_REFERENCE_MODULE) external onlyGovernance {
-        LENS_CONTENT_REFERENCE_MODULE = _LENS_CONTENT_REFERENCE_MODULE;
+    function _createUserSummary(address _universalAddress, uint256 _lendsID) internal returns(UserSummary memory) {
+        UserSummary memory userSummary = UserSummary({
+            lensProfileID: _lendsID,
+            registrationTimestamp: block.timestamp,
+            trueIdentification: _universalAddress,
+            isRegistered: true,
+            referenceFee: 0
+        });
+
+         userSummaries.push(userSummary);
+
+        emit UserSummaryCreated(userSummary.registrationTimestamp, userSummaries.length, _universalAddress);
+        return userSummary;
     }
+
+    function submitReview(
+        uint256 _relationshipID, 
+        string calldata _reviewHash
+    ) external {
+        Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
+
+        require(relationship.contractStatus == ContractStatus.Resolved);
+        require(block.timestamp < relationship.resolutionTimestamp + 30 days);
+
+        uint256 pubIdPointed = IContentReferenceModule(LENS_CONTENT_REFERENCE_MODULE).getPubIdByRelationship(_relationshipID);
+
+        bytes memory t;
+        DataTypes.CommentData memory commentData = DataTypes.CommentData({
+            profileId: universalAddressToSummary[relationship.employer].lensProfileID,
+            contentURI: _reviewHash,
+            profileIdPointed:  universalAddressToSummary[relationship.worker].lensProfileID,
+            pubIdPointed: pubIdPointed,
+            collectModule: address(0),
+            collectModuleData: t,
+            referenceModule: address(0),
+            referenceModuleData: t
+        });
+
+        lensHub.comment(commentData);
+    }
+
+    function _isRegisteredUser(address userAddress) public view returns(bool) {
+        return universalAddressToSummary[userAddress] != address(0);
+    }
+
+    ///////////////////////////////////////////// Service Functions
+
+    function createService(
+        uint256 marketId, 
+        string metadataPtr, 
+        uint256 wad, 
+        uint256 initialWaitlistSize,
+        EIP712MintTokenSignature mintTokenSig
+    ) external {
+        uint256 serviceId = services.length;
+
+        //create service
+        Service storage newService = Service({
+            marketId: marketId,
+            owner: msg.sender,
+            metadataPtr: metadataPtr,
+            wad: wad,
+            MAX_WAITLIST_SIZE: initialWaitlistSize,
+            serviceId: serviceId
+        });
+
+        services.push(newService);
+
+        uint256 profileId = IUserSummary(universalAddressToSummary[msg.sender]).getLensProfileId();
+
+        //create lens post
+        DataTypes.PostData vars = DataTypes.PostData({
+            profileId: profileId,
+            contentURI: metadataPtr,
+            collectModule: 0,
+            collectModuleData: bytes(0),
+            referenceModule: LENS_CONTENT_REFERENCE_MODULE,
+            referenceModuleData: bytes(0)
+        });
+
+        lensHub.postWithSig(vars);
+
+        uint256 pubId = lensHub.getProfile(profileId).pubCount;
+
+        IUserSummary(universalAddressToSummary[msg.sender])._registerService(pubId, newService, mintTokenSig);
+    }
+
+    function _registerService(uint256 lensPublicationId, Service newService, uint256 initialWaitlistSize, EIP712MintTokenSignature sig) internal {
+        //add service
+        servicesIdToService[lensPublicationId] = newService;
+        serviceIdToWaitlist[lensPublicationId] = [];
+        serviceIdToMaxWaitlistSize[lensPublicationId] = initialWaitlistSize;
+
+        //mint one token to owner
+        IERC1155(universalAddressToSummaryAddress[msg.sender]).mint(newService.owner, newService.serviceId, 1, bytes(0));
+
+        //verify sig
+    }
+
+    /**
+     * Purchases a service offering
+     * @param serviceId The id of the service to purchase
+     */
+    function purchaseServiceOffering(uint256 serviceId) public notServiceOwner {
+        uint256 currMaxWaitlistSize = serviceIdToMaxWaitlistSize[serviceId];
+        uint256 serviceWaitlistSize = serviceIdToWaitlist[serviceId];
+
+        require(serviceWaitlistSize <= currMaxWaitlistSize, "max waitlist reached");
+        
+        //TODO remove user from waitlist
+
+        Service serviceDetails = serviceIdToService[serviceId];
+        daiToken.approve(address(this), serviceDetails.wad);
+        require(daiToken.transfer(address(this), serviceDetails.wad), "dai transfer");
+    }
+
+    /**
+     * Resolves a service offering
+     * @param serviceId The id of the service to resolve
+     */
+    function resolveServiceOffering(uint256 serviceId) onlyServiceClient {
+        //change status of service
+
+        //calculate gig earth fee
+        uint256 gigEarthFee = 0;
+
+        //transfer dai from escrow to client
+        daiToken.transfer();
+
+        //transfer dai to gig earth treasruy
+        daiToken.transfer();
+    }
+
+    ///////////////////////////////////////////// Gig Functions
 
     function initializeContract(
         uint256 _relationshipID, 
@@ -302,12 +387,12 @@ contract GigEarth is IArbitrable, IEvidence {
     /* The final solution hash - can be called as long as resolveTraditional hasn't been called  */
     function submitWork(uint256 _relationshipID, string calldata _solutionMetadataPtr) onlyWhenStatus(_relationshipID, ContractStatus.AwaitingWorker) external {
         Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
-        require(msg.sender == relationship.worker);
+        require(msg.sender == relationship.worker, "Only the worker can call this function.");
 
         relationship.solutionMetadataPtr = _solutionMetadataPtr;
     }
 
-    function resolveTraditional(uint256 _relationshipID, uint256 _satisfactoryScore, DataTypes.EIP712Signature calldata _sig) external   {
+    function resolveTraditional(uint256 _relationshipID, uint256 _satisfactoryScore) external   {
         Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
 
         require(msg.sender == relationship.employer);
@@ -316,7 +401,7 @@ contract GigEarth is IArbitrable, IEvidence {
         require(relationship.contractStatus == ContractStatus.AwaitingResolution);
 
         bytes memory testEmptyString = bytes(relationship.solutionMetadataPtr);
-        require(testEmptyString.length != 0);
+        require(testEmptyString.length != 0, "Empty solution metadata pointer.");
 
         if (relationship.contractPayoutType == ContractPayoutType.Flat) {
             _resolveContractAndRewardWorker(_relationshipID);
@@ -329,33 +414,6 @@ contract GigEarth is IArbitrable, IEvidence {
         }
 
         relationship.satisfactoryScore = _satisfactoryScore;
-
-        bytes memory t;
-
-        uint256[] memory profileIds = new uint256[](1);
-        profileIds[0] = universalAddressToSummary[relationship.worker].lensProfileID;
-
-        bytes[] memory b = new bytes[](1);
-        b[0] = abi.encode(_relationshipID, _satisfactoryScore);
-
-        if (universalAddressToAutomatedActions[msg.sender] == true) {
-        lensHub.followWithSig(DataTypes.FollowWithSigData({
-            follower: relationship.employer,
-            profileIds: profileIds,
-            datas: b,
-            sig: _sig
-        }));
-        
-        lensHub.post(DataTypes.PostData({
-            profileId: universalAddressToSummary[relationship.worker].lensProfileID,
-            contentURI: relationship.solutionMetadataPtr,
-            collectModule: address(0),
-            collectModuleData: t,
-            referenceModule: LENS_CONTENT_REFERENCE_MODULE,
-            referenceModuleData: abi.encode(_relationshipID, relationship.valuePtr,  universalAddressToSummary[relationship.worker].referenceFee)
-        }));
-        }
-        
         emit ContractStatusUpdate();
     }
 
@@ -369,15 +427,84 @@ contract GigEarth is IArbitrable, IEvidence {
         relationship.contractStatus = ContractStatus.Resolved;
     }
 
-    function getRelationshipData(uint256 _relationshipID) external returns (Relationship memory)
-    {
-        return relationshipIDToRelationship[_relationshipID];
+    ///////////////////////////////////////////// Market Functions
+    function createMarket(
+        string memory _marketName,
+        address _valuePtr
+    ) public onlyGovernance returns (uint256) {
+        uint256 marketID = markets.length + 1;
+
+        Market memory newMarket = Market({
+            marketName: _marketName,
+            marketID: marketID,
+            relationships: new uint256[](0),
+            valuePtr: _valuePtr
+        });
+
+        markets.push(newMarket);
+        marketIDToMarket[marketID] = newMarket;
+
+        emit MarketCreated(
+            marketID,
+            msg.sender,
+            _marketName
+        );
+        
+        return markets.length;
     }
 
-    /// Non Interface Functionality ///
+    /**
+     * @param _marketID The id of the market to create the relationship
+     * @param _taskMetadataPtr The hash on IPFS for the relationship metadata
+     * @param _deadline The deadline for the worker to complete the relationship
+     */
+    function createFlatRateRelationship(
+        uint256 _marketID, 
+        string calldata _taskMetadataPtr, 
+        uint256 _deadline
+    ) external {
+        Market storage market = marketIDToMarket[_marketID];
+        uint256 relationshipID = market.relationships.length + 1;
+        market.relationships.push(relationshipID);
 
-    /// Dispute Related Functions ///
-    
+        initializeContract(
+            relationshipID,
+            _deadline,
+            market.valuePtr,
+            msg.sender,
+            _marketID,
+            _taskMetadataPtr
+        );
+    }
+
+    /**
+     * @param _marketID The id of the market to create the relationship
+     * @param _taskMetadataPtr The hash on IPFS for the relationship metadata
+     * @param _deadline The deadline for the worker to complete the relationship
+     * @param _numMilestones The number of milestones in this relationship
+     */
+    function createMilestoneRelationship(
+        uint256 _marketID, 
+        string calldata _taskMetadataPtr, 
+        uint256 _deadline, 
+        uint256 _numMilestones
+    ) external {
+        Market storage market = marketIDToMarket[_marketID];
+        uint256 relationshipID = market.relationships.length + 1;
+        market.relationships.push(relationshipID);
+
+        initializeContract(
+            relationshipID,
+            _deadline,
+            market.valuePtr,
+            msg.sender,
+            _marketID,
+            _taskMetadataPtr
+        );
+    }
+
+    ///////////////////////////////////////////// Kleros
+
     /**
      * @notice A call to this function initiates the arbitration pay period for the worker of the relationship.
      * @dev The employer must call this function a second time to claim the funds from this contract if worker does not with to enter arbitration.
@@ -580,170 +707,29 @@ contract GigEarth is IArbitrable, IEvidence {
         relationship.wad = 0;
     }
 
-    // User Functions
-    function register(DataTypes.CreateProfileData calldata vars) external returns(uint256) {
-        //check if the user is registered
-        if (isRegisteredUser(msg.sender)) {
-            revert();
-        }
-
-        //register user to lenshub and retrieve the user id from the profile handle (to will be GigEarth and user's can elect to remove opportunity as owner - will mint the nft back to the user)
-        lensHub.createProfile(vars);
-        uint256 lensProfileId = lensHub.getProfileIdByHandle(vars.handle);
-        
-        //create a user summary and assign the user's address to the summary
-        universalAddressToSummary[msg.sender] = _createUserSummary(msg.sender, lensProfileId);
-    
-
-        emit UserRegistered(msg.sender);
-        
-        return userSummaries.length - 1;
+    ///////////////////////////////////////////// Setters
+    function setLensFollowModule(address _LENS_FOLLOW_MODULE) external onlyGovernance {
+        LENS_FOLLOW_MODULE = _LENS_FOLLOW_MODULE;
     }
 
-    function toggleAutomatedActions(bool _allowAutomatedActions) external {
-        universalAddressToAutomatedActions[msg.sender] = _allowAutomatedActions;
-    }
-
-    function setGigEarthDispatcher(DataTypes.SetDispatcherWithSigData calldata vars) external {
-        lensHub.setDispatcherWithSig(vars);
-    }
-
-    function unlink() external {
-
-    }
-
-    function submitReview(
-        uint256 _relationshipID, 
-        string calldata _reviewHash
-    ) external {
-        Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
-
-        require(relationship.contractStatus == ContractStatus.Resolved);
-        require(block.timestamp < relationship.resolutionTimestamp + 30 days);
-
-        uint256 pubIdPointed = IContentReferenceModule(LENS_CONTENT_REFERENCE_MODULE).getPubIdByRelationship(_relationshipID);
-
-        bytes memory t;
-        DataTypes.CommentData memory commentData = DataTypes.CommentData({
-            profileId: universalAddressToSummary[relationship.employer].lensProfileID,
-            contentURI: _reviewHash,
-            profileIdPointed:  universalAddressToSummary[relationship.worker].lensProfileID,
-            pubIdPointed: pubIdPointed,
-            collectModule: address(0),
-            collectModuleData: t,
-            referenceModule: address(0),
-            referenceModuleData: t
-        });
-
-        lensHub.comment(commentData);
-    }
-
-    function _createUserSummary(address _universalAddress, uint256 _lendsID) internal returns(UserSummary memory) {
-        UserSummary memory userSummary = UserSummary({
-            lensProfileID: _lendsID,
-            registrationTimestamp: block.timestamp,
-            trueIdentification: _universalAddress,
-            isRegistered: true,
-            referenceFee: 0
-        });
-
-         userSummaries.push();
-
-        emit UserSummaryCreated(userSummary.registrationTimestamp, userSummaries.length, _universalAddress);
-        return userSummary;
-    }
-
-    function isRegisteredUser(address _userAddress) public view returns(bool) {
-        return universalAddressToSummary[_userAddress].isRegistered;
-    }
-
-    // Market Functions
-    function createMarket(
-        string memory _marketName,
-        address _valuePtr
-    ) public returns (uint256) {
-        uint256 marketID = markets.length + 1;
-
-        Market memory newMarket = Market({
-            marketName: _marketName,
-            marketID: marketID,
-            relationships: new uint256[](0),
-            valuePtr: _valuePtr
-        });
-
-        markets.push(newMarket);
-        marketIDToMarket[marketID] = newMarket;
-
-        emit MarketCreated(
-            marketID,
-            msg.sender,
-            _marketName
-        );
-        
-        return markets.length;
+    function setLensContentReferenceModule(address _LENS_CONTENT_REFERENCE_MODULE) external onlyGovernance {
+        LENS_CONTENT_REFERENCE_MODULE = _LENS_CONTENT_REFERENCE_MODULE;
     }
 
     /**
-     * @param _marketID The id of the market to create the relationship
-     * @param _taskMetadataPtr The hash on IPFS for the relationship metadata
-     * @param _deadline The deadline for the worker to complete the relationship
+     * Set max waitlist size for any service
+     * @param serviceId The id of the service
+     * @param newMaxWaitlistSize The desired size of the waitlist for a given service
      */
-    function createFlatRateRelationship(
-        uint256 _marketID, 
-        string calldata _taskMetadataPtr, 
-        uint256 _deadline
-    ) external {
-        Market storage market = marketIDToMarket[_marketID];
-        uint256 relationshipID = market.relationships.length + 1;
-        market.relationships.push(relationshipID);
+    function setMaxWaitlistSize(uint256 serviceId, uint256 newMaxWaitlistSize) public onlyOwnerOrDispatcherOfLensProfileId {}
 
-        initializeContract(
-            relationshipID,
-            _deadline,
-            market.valuePtr,
-            msg.sender,
-            _marketID,
-            _taskMetadataPtr
-        );
-    }
-
-    /**
-     * @param _marketID The id of the market to create the relationship
-     * @param _taskMetadataPtr The hash on IPFS for the relationship metadata
-     * @param _deadline The deadline for the worker to complete the relationship
-     * @param _numMilestones The number of milestones in this relationship
-     */
-    function createMilestoneRelationship(
-        uint256 _marketID, 
-        string calldata _taskMetadataPtr, 
-        uint256 _deadline, 
-        uint256 _numMilestones
-    ) external {
-        Market storage market = marketIDToMarket[_marketID];
-        uint256 relationshipID = market.relationships.length + 1;
-        market.relationships.push(relationshipID);
-
-        initializeContract(
-            relationshipID,
-            _deadline,
-            market.valuePtr,
-            msg.sender,
-            _marketID,
-            _taskMetadataPtr
-        );
-    }
-
-    // Getters
+    ///////////////////////////////////////////// Getters
     function getUserCount() public view returns(uint) {
         return userSummaries.length;
     }
 
-    /**
-     * What value will this return and in what relation will it be to the normalized value?
-     */
-    function getLocalPeerScore(address _observer, address _observed) public view {
-        
-    }
+
+    function getLocalPeerScore(address _observer, address _observed) public view {}
 
     function getSummaryByLensId(uint256 profileId) external view returns(UserSummary memory) {
         return lensProfileIdToSummary[profileId];
@@ -753,5 +739,15 @@ contract GigEarth is IArbitrable, IEvidence {
         return lensProfileIdToSummary[profileId].trueIdentification;
     }
 
+    function getServices() public view returns(Services[]) {
+        return services;
+    }
 
+    function getLensProfileId() external view returns(uint256) {
+        return lensProfileId;
+    }
+
+    function getRelationshipData(uint256 _relationshipID) external returns (Relationship memory) {
+        return relationshipIDToRelationship[_relationshipID];
+    }
 }

@@ -22,6 +22,7 @@ import {
   FollowerOnlyReferenceModule,
   FollowerOnlyReferenceModule__factory,
   FollowNFT__factory,
+  GigEarth,
   Helper,
   Helper__factory,
   InteractionLogic__factory,
@@ -38,11 +39,18 @@ import {
   ModuleGlobals,
   ModuleGlobals__factory,
   PublishingLogic__factory,
+  RelationshipContentReferenceModule,
+  RelationshipFollowModule,
   RevertCollectModule,
   RevertCollectModule__factory,
+  SimpleCentralizedArbitrator,
   TimedFeeCollectModule,
   TimedFeeCollectModule__factory,
   TransparentUpgradeableProxy__factory,
+  RelationshipFollowModule__factory,
+  RelationshipContentReferenceModule__factory,
+  GigEarth__factory,
+  SimpleCentralizedArbitrator__factory
 } from '../typechain-types';
 import { LensHubLibraryAddresses } from '../typechain-types/factories/LensHub__factory';
 import { FAKE_PRIVATEKEY, ZERO_ADDRESS } from './helpers/constants';
@@ -94,6 +102,8 @@ export let hubLibs: LensHubLibraryAddresses;
 export let eventsLib: Events;
 export let moduleGlobals: ModuleGlobals;
 export let helper: Helper;
+export let gigEarthGovernance : Signer;
+export let gigEarthTreasury: Signer;
 
 /* Modules */
 
@@ -104,15 +114,19 @@ export let emptyCollectModule: EmptyCollectModule;
 export let revertCollectModule: RevertCollectModule;
 export let limitedFeeCollectModule: LimitedFeeCollectModule;
 export let limitedTimedFeeCollectModule: LimitedTimedFeeCollectModule;
+export let gigEarth : GigEarth
+export let simpleArbitrator : SimpleCentralizedArbitrator
 
 // Follow
 export let approvalFollowModule: ApprovalFollowModule;
 export let feeFollowModule: FeeFollowModule;
 export let mockFollowModule: MockFollowModule;
+export let relationshipFollowModule: RelationshipFollowModule
 
 // Reference
 export let followerOnlyReferenceModule: FollowerOnlyReferenceModule;
 export let mockReferenceModule: MockReferenceModule;
+export let relationshipReferenceModule: RelationshipContentReferenceModule
 
 export function makeSuiteCleanRoom(name: string, tests: () => void) {
   describe(name, () => {
@@ -134,6 +148,8 @@ before(async function () {
   user = accounts[1];
   userTwo = accounts[2];
   governance = accounts[3];
+  gigEarthGovernance = accounts[4]
+  gigEarthTreasury = accounts[5]
   deployerAddress = await deployer.getAddress();
   userAddress = await user.getAddress();
   userTwoAddress = await userTwo.getAddress();
@@ -184,6 +200,14 @@ before(async function () {
 
   // Connect the hub proxy to the LensHub factory and the user for ease of use.
   lensHub = LensHub__factory.connect(proxy.address, user);
+  simpleArbitrator = await new SimpleCentralizedArbitrator__factory(deployer).deploy()
+  gigEarth = await new GigEarth__factory(deployer).deploy(await gigEarthGovernance.getAddress(), await gigEarthTreasury.getAddress(), simpleArbitrator.address, proxy.address)
+  
+  relationshipFollowModule = await new RelationshipFollowModule__factory(deployer).deploy(proxy.address, gigEarth.address)
+  relationshipReferenceModule = await new RelationshipContentReferenceModule__factory(deployer).deploy(proxy.address, moduleGlobals.address, gigEarth.address)
+
+  await gigEarth.connect(gigEarthGovernance).setLensContentReferenceModule(relationshipReferenceModule.address)
+  await gigEarth.connect(gigEarthGovernance).setLensFollowModule(relationshipFollowModule.address)
 
   // Currency
   currency = await new Currency__factory(deployer).deploy();
@@ -229,6 +253,15 @@ before(async function () {
   ).to.not.be.reverted;
   await expect(
     lensHub.connect(governance).whitelistProfileCreator(testWallet.address, true)
+  ).to.not.be.reverted;
+  await expect(
+    lensHub.connect(governance).whitelistProfileCreator(gigEarth.address, true)
+  ).to.not.be.reverted;
+  await expect(
+    lensHub.connect(governance).whitelistFollowModule(relationshipFollowModule.address, true)
+  ).to.not.be.reverted;
+  await expect(
+    lensHub.connect(governance).whitelistReferenceModule(relationshipReferenceModule.address, true)
   ).to.not.be.reverted;
 
   expect(lensHub).to.not.be.undefined;

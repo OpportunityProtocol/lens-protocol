@@ -1,6 +1,6 @@
 // We import Chai to use its asserting functions here.
 import { expect } from 'chai'
-import { ContractReceipt, BigNumber, Event, Signer, Wallet } from 'ethers';
+import { ContractReceipt, BigNumber, Event, Signer, Wallet, BigNumberish } from 'ethers';
 import {ethers} from 'hardhat'
 import { TestDai } from '../../typechain-types/TestDai'
 import { SimpleCentralizedArbitrator } from '../../typechain-types/SimpleCentralizedArbitrator'
@@ -9,18 +9,29 @@ import { getContractFactory } from '@nomiclabs/hardhat-ethers/types';
 import '@nomiclabs/hardhat-ethers';
 import { makeSuiteCleanRoom, moduleGlobals } from '../__setup.spec';
 
-import { lensHub } from '../__setup.spec'
+import { 
+  lensHub,
+  gigEarth,
+  gigEarthGovernance,
+  gigEarthTreasury,
+  simpleArbitrator,
+  relationshipFollowModule,
+  relationshipReferenceModule
+} from '../__setup.spec'
+
 import { GigEarth, GigEarthInterface, } from '../../typechain-types/GigEarth';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { getSetDispatcherWithSigParts } from '../helpers/utils';
+import { CreateProfileDataStruct, SetDispatcherWithSigDataStruct } from '../../typechain-types/LensHub';
+import { EIP712SignatureStruct } from '../../typechain-types/LensNFTBase';
 
 describe("Markets", async function () {
-  let marketDeployer, employer, worker, governance, treasury
+  let marketDeployer, employer : SignerWithAddress, worker : SignerWithAddress, governance, treasury
 
   let gigEarthInstance
 
   let TestDai
   let testDaiInstance : TestDai
-
-  let arbitrator, gigEarth, referenceModule, followModule
 
   const FLATE_RATE_CONTRACT_INIT_DATA = { escrow: '0', valuePtr: '0', _taskMetadataPtr: '8dj39Dks8' }
   const MILESTONE_CONTRACT_INIT_DATA = { escrow: '0', valuePtr: '0', taskMetadataPtr: '8js82kd0f', numMilstones: 5}
@@ -32,15 +43,6 @@ describe("Markets", async function () {
       marketDeployer = generalAddrs[0]
       employer = generalAddrs[1]
       worker = generalAddrs[2]
-      governance = generalAddrs[3]
-      treasury = generalAddrs[4]
-
-      arbitrator = "0x500D1d6A4c7D8Ae28240b47c8FCde034D827fD5e"
-      gigEarth = "0xc4905364b78a742ccce7B890A89514061E47068D"
-      referenceModule = "0x3521eF8AaB0323004A6dD8b03CE890F4Ea3A13f5"
-      followModule = "0x7e35Eaf7e8FBd7887ad538D4A38Df5BbD073814a"
-
-      gigEarthInstance = await ethers.getContractAt('GigEarth', gigEarth)
 
       TestDai = await ethers.getContractFactory("TestDai")
       testDaiInstance  = await TestDai.deploy(1)
@@ -59,54 +61,84 @@ describe("Markets", async function () {
       expect(await testDaiInstance.balanceOf(employer.address)).to.equal(BigNumber.from(1000))
       expect(await testDaiInstance.balanceOf(worker.address)).to.equal(BigNumber.from(1000))
 
-      const employerProfileData = {
-        to: gigEarth.address,
+      const employerProfileData : CreateProfileDataStruct = {
+        to: employer.address,
         handle: 'randomemployer',
-        imageURI: "",
-        followModule: followModule,
-        followModuleData: 0,
-        followNFTURI: "",
+        imageURI: 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
+        followModule: relationshipFollowModule.address,
+        followModuleData: [],
+        followNFTURI: 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
       }
 
-      const workerProfileData = {
-        to: gigEarth.adderss,
+      const workerProfileData : CreateProfileDataStruct = {
+        to: worker.address,
         handle: 'randomworker',
-        imageURI: "",
-        followModule: followModule,
-        followModuleData: 0,
-        followNFTURI: "",
+        imageURI: 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
+        followModule: relationshipFollowModule.address,
+        followModuleData: [],
+        followNFTURI: 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
       }
 
-      await gigEarthInstance.connect(employer).register(employerProfileData)
-      await gigEarthInstance.connect(worker).register(workerProfileData)
+      await expect(gigEarth.connect(employer).register(employerProfileData)).to.not.be.reverted;
+      await expect(gigEarth.connect(worker).register(workerProfileData)).to.not.to.reverted;
 
       
-      const employerProfileId = lensHub.getProfileIdByHandle(employerProfileData.handle);
-      const SET_EMPLOYER_DISPATCHER_DATA = {
+      const employerProfileId = await lensHub.getProfileIdByHandle(employerProfileData.handle);
+      const workerProfileId = await lensHub.getProfileIdByHandle(workerProfileData.handle);
+     /*
+      const employerNonce = await employer.getTransactionCount()
+      console.log('EMPLOYER NONCE: ' + employerNonce)
+      const today = new Date()
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      console.log("OWNER: " + await lensHub.ownerOf(BigNumber.from(employerProfileId)))
+      console.log('EMPLOYER ADDR: ' + employer.address)
+      console.log('GIG EARTH ADDR: '  + gigEarth.address)
+      const deadlineOne =  Math.trunc((tomorrow.getTime() + 120 * 1000) / 1000).toString()
+      const employerSig = await getSetDispatcherWithSigParts(BigNumber.from(employerProfileId), gigEarth.address, employerNonce, deadlineOne)
+      const SET_EMPLOYER_DISPATCHER_DATA : SetDispatcherWithSigDataStruct = {
         profileId: employerProfileId,
         dispatcher: gigEarth.address,
-        sig:
+        sig: {
+          v: employerSig.v,
+          r: employerSig.r,
+          s: employerSig.s,
+          deadline: deadlineOne
+        }
       }
+      console.log(employerSig)*/
 
-      await gigEarthInstance.connect(employer).setGigEarthDispatcher(employerProfileId, gigEarth.address, SET_EMPLOYER_DISPATCHER_DATA)
-      await gigEarthInstance.connect(employer).toggleAutomatedActions(true);
+     // await expect(gigEarth.connect(employer).setGigEarthDispatcher(SET_EMPLOYER_DISPATCHER_DATA)).to.not.be.reverted
+      /*await expect(gigEarth.connect(employer).toggleAutomatedActions(true)).to.not.be.reverted;
 
-      const workerProfileId = lensHub.getProfileIdByHandle(workerProfileData.handle);
-      const SET_WORKER_DISPATCHER_DATA = {
+ 
+
+      const workerNonce = await worker.getTransactionCount()
+      const deadlineTwo =  Math.trunc((Date.now() + 120 * 1000) / 1000).toString()
+      const workerSig = await getSetDispatcherWithSigParts(BigNumber.from(workerProfileId), gigEarth.address, workerNonce, deadlineTwo)
+      const SET_WORKER_DISPATCHER_DATA : SetDispatcherWithSigDataStruct = {
         profileId: workerProfileId,
         dispatcher: gigEarth.address,
-        sig: 
+        sig: {
+          v: workerSig.v,
+          r: workerSig.r,
+          s: workerSig.s,
+          deadline: deadlineTwo
+        }
       }
-      await gigEarthInstance.connect(worker).setGigEarthDispatcher(workerProfileId, gigEarth.address, SET_WORKER_DISPATCHER_DATA)
-      await gigEarthInstance.connect(worker).toggleAutomatedActions(true);
+      
+      await expect(gigEarth.connect(worker).setGigEarthDispatcher(SET_WORKER_DISPATCHER_DATA)).to.not.be.reverted;
+      await expect(gigEarth.connect(worker).toggleAutomatedActions(true)).to.not.be.reverted;
+
+      console.log('Completed?')*/
 
 
     });
 
-    context('GigEarth', function() {
+   context('GigEarth', function() {
       it("happy path - flat rate relationship - employer should create relationship and successfully complete with a worker", async () => {
-       /* console.log('deplyoign market')
-        const marketDeploymentTx = await gigEarthInstance
+
+        const marketDeploymentTx = await gigEarth
           .connect(marketDeployer)
           .createMarket(
             "Test Market One", 
@@ -115,44 +147,32 @@ describe("Markets", async function () {
 
           console.log(marketDeploymentTx)
   
-          const marketDeploymentTxReceipt = await marketDeploymentTx.wait()
+         const marketDeploymentTxReceipt = await marketDeploymentTx.wait()
           const marketDeploymentTxEvents = marketDeploymentTxReceipt.events?.find(event => event.event == 'MarketCreated')
           const deployedMarketAddress = marketDeploymentTxEvents?.args?.[0]
             
           console.log('Create relationship')
-          await gigEarthInstance
-          .connect(employer)
-          .createFlatRateRelationship(
-            BigNumber.from(1), 
-            FLATE_RATE_CONTRACT_INIT_DATA._taskMetadataPtr, 
-            BigNumber.from(0)
-          )
+          await gigEarth.connect(employer).createFlatRateRelationship(1, "sdas", BigNumber.from(new Date().getSeconds()))
 
           console.log('about to grant')
   
-          await gigEarthInstance.connect(employer).grantProposalRequest(1, worker.address, testDaiInstance.address, 1000, "")
+          await gigEarth.connect(employer).grantProposalRequest(1, worker.address, testDaiInstance.address, 1000, "")
             
           console.log('about to approve')
-          await testDaiInstance.connect(employer).approve(gigEarthInstance.address, 1000);
+          await testDaiInstance.connect(employer).approve(gigEarth.address, 1000);
+          console.log('@@@@@@@@')
             
-          let LensEmployerToWorkerEIP712FollowData = {
-            v: 0,
-            r: 0,
-            s: 0,
-            deadline: 0
-          }
 
-          await gigEarthInstance.connect(worker).work(1, "")
-  
-          await gigEarthInstance.connect(employer).resolveTraditional(1, 20, LensEmployerToWorkerEIP712FollowData)
-  
+          await gigEarth.connect(worker).work(BigNumber.from(1), "@8vj30_df")
+          console.log('resolve trad')
+
+          await gigEarth.connect(worker).submitWork(1, '@hDJ83^*~')
+          await gigEarth.connect(employer).resolveTraditional(1, 20)
+            console.log('resolved')
           expect(await testDaiInstance.balanceOf(employer.address)).to.equal(BigNumber.from(0))
-          expect(await testDaiInstance.balanceOf(worker.address)).to.equal(BigNumber.from(2000))*/
+          expect(await testDaiInstance.balanceOf(worker.address)).to.equal(BigNumber.from(2000))
+          console.log('balance works out')
       })
     })
   })
-
-
-
-
 });
