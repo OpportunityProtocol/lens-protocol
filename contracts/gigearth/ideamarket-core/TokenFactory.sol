@@ -2,23 +2,23 @@
 pragma solidity 0.6.9;
 pragma experimental ABIEncoderV2;
 
-import "../../shared/util/MinimalProxy.sol";
-import "../../shared/util/Initializable.sol";
-import "../../shared/util/Ownable.sol";
-import "../../shared/core/interfaces/IIdeaTokenFactory.sol";
-import "../../shared/core/IdeaToken.sol";
-import "../../shared/core/interfaces/IIdeaToken.sol";
-import "../../shared/core/nameVerifiers/IIdeaTokenNameVerifier.sol";
+import "./MinimalProxy.sol";
+import "./Initializable.sol";
+import "./Ownable.sol";
+import "../interface/ITokenFactory.sol";
+import "./ServiceToken.sol";
+import "../interfaces/IServiceToken.sol";
+import "./ITokenNameVerifier.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 /**
- * @title IdeaTokenFactory
+ * @title ITokenFactory (Originally: IdeaTokenFactory)
  * @author Alexander Schlindwein
  *
  * Manages the creation of markets and IdeaTokens
  * Sits behind an AdminUpgradabilityProxy
  */
-contract IdeaTokenFactory is IIdeaTokenFactory, Initializable, Ownable {
+contract TokenFactory is ITokenFactory, Initializable, Ownable {
 
     using SafeMath for uint256;
 
@@ -35,12 +35,12 @@ contract IdeaTokenFactory is IIdeaTokenFactory, Initializable, Ownable {
 
     // Address of the IdeaTokenExchange contract
     // This is needed to transfer ownership of a newly created IdeaToken to the IdeaTokenExchange
-    address _ideaTokenExchange;
+    address _tokenExchange;
 
     // Address of the IdeaToken logic contract
-    address _ideaTokenLogic;
+    address _tokenLogic; //Investigage
 
-    // IdeaTokenAddress => IDPair. Stores an IDPair (marketID, tokenID) for an IdeaToken
+    // ServiceTokenAddress => IDPair. Stores an IDPair (marketID, tokenID) for a ServiceToken
     mapping(address => IDPair) _tokenIDPairs;
 
     // marketID => MarketInfo. Stores information for a market
@@ -68,14 +68,14 @@ contract IdeaTokenFactory is IIdeaTokenFactory, Initializable, Ownable {
     /**
      * Initializes the contract with all required values
      *
-     * @param owner The owner of the contract
+     * @param owner The owner of the contract (Should be network manager)
      */
-    function initialize(address owner, address ideaTokenExchange, address ideaTokenLogic) external virtual initializer {
-        require(ideaTokenExchange != address(0) && ideaTokenLogic != address(0), "invalid-params");
+    function initialize(address owner, address tokenExchange, address tokenLogic) external virtual initializer {
+        require(tokenExchange != address(0) && tokenLogic != address(0), "invalid-params");
 
         setOwnerInternal(owner); // Checks owner to be non-zero
-        _ideaTokenExchange = ideaTokenExchange;
-        _ideaTokenLogic = ideaTokenLogic;
+        _tokenExchange = ideaTokenExchange;
+        _tokenLogic = ideaTokenLogic;
     }
 
     /**
@@ -108,7 +108,7 @@ contract IdeaTokenFactory is IIdeaTokenFactory, Initializable, Ownable {
                 exists: true,
                 id: marketID,
                 name: marketName,
-                nameVerifier: IIdeaTokenNameVerifier(nameVerifier),
+                nameVerifier: ITokenNameVerifier(nameVerifier),
                 numTokens: 0,
                 baseCost: baseCost,
                 priceRise: priceRise,
@@ -139,38 +139,39 @@ contract IdeaTokenFactory is IIdeaTokenFactory, Initializable, Ownable {
     }
 
     /**
-     * Adds a new IdeaToken using MinimalProxy
+     * Adds a new ServiceToken using MinimalProxy
      *
+     * @param serviceId The service this token represents
      * @param tokenName The name of the token
      * @param marketID The ID of the market
      * @param lister The address of the account which off-chain software shall see as lister of this token. Only emitted, not stored
      */
-    function addToken(string calldata tokenName, uint marketID, address lister) external virtual override {
+    function addToken(uint256 serviceId, string calldata tokenName, uint marketID, address lister) external virtual override {
         MarketInfo storage marketInfo = _markets[marketID];
         require(marketInfo.marketDetails.exists, "market-not-exist");
         require(isValidTokenName(tokenName, marketID), "invalid-name");
 
-        IIdeaToken ideaToken = IIdeaToken(address(new MinimalProxy(_ideaTokenLogic)));
-        ideaToken.initialize(string(abi.encodePacked(marketInfo.marketDetails.name, ": ", tokenName)), _ideaTokenExchange);
+        IServiceToken serviceToken = IServiceToken(address(new MinimalProxy(_tokenLogic)));
+        serviceToken.initialize(string(abi.encodePacked(marketInfo.marketDetails.name, ": ", tokenName)), _tokenExchange);
 
-        uint tokenID = ++marketInfo.marketDetails.numTokens;
+        uint tokenID = serviceId; //++marketInfo.marketDetails.numTokens;
         TokenInfo memory tokenInfo = TokenInfo({
             exists: true,
             id: tokenID,
             name: tokenName,
-            ideaToken: ideaToken
+            ideaToken: serviceToken
         });
 
         marketInfo.tokens[tokenID] = tokenInfo;
         marketInfo.tokenIDs[tokenName] = tokenID;
         marketInfo.tokenNameUsed[tokenName] = true;
-        _tokenIDPairs[address(ideaToken)] = IDPair({
+        _tokenIDPairs[address(serviceToken)] = IDPair({
             exists: true,
             marketID: marketID,
             tokenID: tokenID
         });
 
-        emit NewToken(tokenID, marketID, tokenName, address(ideaToken), lister);
+        emit NewToken(tokenID, marketID, tokenName, address(serviceToken), lister);
     }
 
     /**
@@ -226,8 +227,8 @@ contract IdeaTokenFactory is IIdeaTokenFactory, Initializable, Ownable {
         return _markets[_marketIDs[marketName]].marketDetails;
     }
 
-    function getMarketDetailsByTokenAddress(address ideaToken) external view override returns (MarketDetails memory) {
-        return _markets[_tokenIDPairs[ideaToken].marketID].marketDetails;
+    function getMarketDetailsByTokenAddress(address serviceToken) external view override returns (MarketDetails memory) {
+        return _markets[_tokenIDPairs[serviceToken].marketID].marketDetails;
     }
 
     /**
@@ -318,7 +319,7 @@ contract IdeaTokenFactory is IIdeaTokenFactory, Initializable, Ownable {
 
         MarketDetails storage marketDetails = _markets[marketID].marketDetails;
         require(marketDetails.exists, "market-not-exist");
-        marketDetails.nameVerifier = IIdeaTokenNameVerifier(nameVerifier);
+        marketDetails.nameVerifier = ITokenNameVerifier(nameVerifier);
 
         emit NewNameVerifier(marketID, nameVerifier);
     }

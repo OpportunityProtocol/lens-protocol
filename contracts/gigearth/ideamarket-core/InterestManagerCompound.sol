@@ -2,10 +2,10 @@
 pragma solidity 0.6.9;
 
 import "./interfaces/IInterestManager.sol";
-import "../../shared/util/Ownable.sol";
-import "../../shared/compound/ICToken.sol";
-import "../../shared/compound/IComptroller.sol";
-import "../../shared/util/Initializable.sol";
+import "./Ownable.sol";
+import "../interface/ICToken.sol";
+import "../interface/IComptroller.sol";
+import "./Initializable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 

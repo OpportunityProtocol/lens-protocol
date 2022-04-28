@@ -57,6 +57,9 @@ library NetworkInterface {
         string metadataPtr;
         uint256 wad;
         uint256 MAX_WAITLIST_SIZE;
+        uint256 referralShare;
+        bool exist;
+        uint256 id;
     }
 
     enum RulingOptions {
@@ -100,5 +103,12 @@ library NetworkInterface {
     enum ContractPayoutType {
         Flat,
         Milestone
+    }
+
+    struct ClaimedServiceMetadata {
+        uint256 serviceId;
+        address client;
+        uint256 timestampPurchased;
+        address referral;
     }
 }

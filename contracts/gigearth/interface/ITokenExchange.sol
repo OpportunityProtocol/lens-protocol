@@ -2,10 +2,10 @@
 pragma solidity 0.6.9;
 pragma experimental ABIEncoderV2;
 
-import "./IIdeaTokenFactory.sol";
+import "./ITokenFactory.sol";
 
 /**
- * @title IIdeaTokenExchange
+ * @title ITokenExchange
  * @author Alexander Schlindwein
  */
 
@@ -17,13 +17,13 @@ struct CostAndPriceAmounts {
 }
 
 interface IIdeaTokenExchange {
-    function sellTokens(address ideaToken, uint amount, uint minPrice, address recipient) external;
-    function getPriceForSellingTokens(address ideaToken, uint amount) external view returns (uint);
+    function sellTokens(address serviceToken, uint256 tokenId, uint amount, uint minPrice, address recipient) external;
+    function getPriceForSellingTokens(address serviceToken, uint256 tokenId, uint amount) external view returns (uint);
     function getPricesForSellingTokens(MarketDetails memory marketDetails, uint supply, uint amount, bool feesDisabled) external pure returns (CostAndPriceAmounts memory);
-    function buyTokens(address ideaToken, uint amount, uint fallbackAmount, uint cost, address recipient) external;
-    function getCostForBuyingTokens(address ideaToken, uint amount) external view returns (uint);
+    function buyTokens(address serviceToken, uint256 tokenId, uint amount, uint fallbackAmount, uint cost, address recipient) external;
+    function getCostForBuyingTokens(address serviceToken, uint amount) external view returns (uint);
     function getCostsForBuyingTokens(MarketDetails memory marketDetails, uint supply, uint amount, bool feesDisabled) external pure returns (CostAndPriceAmounts memory);
-    function setTokenOwner(address ideaToken, address owner) external;
+    function setTokenOwner(address serviceToken, address owner) external;
     function setPlatformOwner(uint marketID, address owner) external;
     function withdrawTradingFee() external;
     function withdrawTokenInterest(address token) external;
@@ -34,6 +34,6 @@ interface IIdeaTokenExchange {
     function getPlatformFeePayable(uint marketID) external view returns (uint);
     function getTradingFeePayable() external view returns (uint);
     function setAuthorizer(address authorizer) external;
-    function isTokenFeeDisabled(address ideaToken) external view returns (bool);
-    function setTokenFeeKillswitch(address ideaToken, bool set) external;
+    function isTokenFeeDisabled(address serviceToken) external view returns (bool);
+    function setTokenFeeKillswitch(address serviceToken, bool set) external;
 }

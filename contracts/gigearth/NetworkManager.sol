@@ -200,8 +200,10 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
         string metadataPtr, 
         uint256 wad, 
         uint256 initialWaitlistSize,
+        uint256 referralSharePayout
         EIP712MintTokenSignature mintTokenSig
     ) external {
+        //compute service id
         uint256 serviceId = services.length;
 
         //create service
@@ -211,7 +213,9 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
             metadataPtr: metadataPtr,
             wad: wad,
             MAX_WAITLIST_SIZE: initialWaitlistSize,
-            serviceId: serviceId
+            id: serviceId,
+            exist: false,
+            referralShare: referralSharePayout
         });
 
         services.push(newService);
@@ -232,7 +236,7 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
 
         uint256 pubId = lensHub.getProfile(profileId).pubCount;
 
-        IUserSummary(universalAddressToSummary[msg.sender])._registerService(pubId, newService, mintTokenSig);
+        _registerService(pubId, newService, mintTokenSig);
     }
 
     function _registerService(uint256 lensPublicationId, Service newService, uint256 initialWaitlistSize, EIP712MintTokenSignature sig) internal {
@@ -250,14 +254,20 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
     /**
      * Purchases a service offering
      * @param serviceId The id of the service to purchase
+     *
+     * @notice There is no mechanism to withdraw funds once a service has been purchased. All interactions should
+     * be handled through gig earth incase of dispute.
      */
     function purchaseServiceOffering(uint256 serviceId) public notServiceOwner {
         uint256 currMaxWaitlistSize = serviceIdToMaxWaitlistSize[serviceId];
-        uint256 serviceWaitlistSize = serviceIdToWaitlist[serviceId];
+        uint256 serviceWaitlistSize = serviceIdToWaitlist[serviceId].length;
 
         require(serviceWaitlistSize <= currMaxWaitlistSize, "max waitlist reached");
-        
-        //TODO remove user from waitlist
+        serviceIdToWaitlist[serviceId].push(ClaimedServiceMetadata({
+            serviceId: serviceId,
+            client: msg.sender,
+            timestampPurchased: block.timestamp
+        }));
 
         Service serviceDetails = serviceIdToService[serviceId];
         daiToken.approve(address(this), serviceDetails.wad);
@@ -269,16 +279,29 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
      * @param serviceId The id of the service to resolve
      */
     function resolveServiceOffering(uint256 serviceId) onlyServiceClient {
-        //change status of service
+        require(serviceIdToWaitlist[serviceId][serviceId].client == msg.sender);
+        
+        uint256 networkFee;
+        uint256 payout = serviceIdToService[serviceId].wad;
+        if (serviceIdToWaitlist[serviceId][serviceId].referral != address(0)) {
+            uint256 referralShare = payout - serviceIdToWaitlist[serviceId][serviceId].referralShare;
+            dai.transfer(serviceIdToWaitlist[serviceId][serviceId].referral, referralShare);
+            
+            //calculate gig earth fee
+            //TODO change network fee amount
+            networkFee = ((payout - referralShare) * .01)
+        } else {
+            //calculate gig earth fee
+            //TODO change network fee amount
+            networkFee = payout * .01;
+        }
+    
+        uint256 ownerPayout = payout - networkFee;
+        daiToken.transfer(serviceIdToService[serviceId].owner, ownerPayout); //transfer dai from escrow to client
+        daiToken.transfer(treasury, networkFee); //transfer dai to gig earth treasruy
 
-        //calculate gig earth fee
-        uint256 gigEarthFee = 0;
-
-        //transfer dai from escrow to client
-        daiToken.transfer();
-
-        //transfer dai to gig earth treasruy
-        daiToken.transfer();
+        //remove from waitlist
+        delete serviceIdToWaitlist[serviceId][serviceId]; //leaves a gap at index [serviceId]
     }
 
     ///////////////////////////////////////////// Gig Functions

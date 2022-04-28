@@ -3,11 +3,12 @@ pragma solidity 0.6.9;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./IIdeaToken.sol";
-import "../nameVerifiers/IIdeaTokenNameVerifier.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC1155.sol";
+import "./IServiceToken.sol";
+import "./ITokenNameVerifier.sol";
 
 /**
- * @title IIdeaTokenFactory
+ * @title ITokenFactory
  * @author Alexander Schlindwein
  */
 
@@ -21,7 +22,7 @@ struct TokenInfo {
     bool exists;
     uint id;
     string name;
-    IIdeaToken ideaToken;
+    IServiceToken serviceToken;
 }
 
 struct MarketDetails {
@@ -29,7 +30,7 @@ struct MarketDetails {
     uint id;
     string name;
 
-    IIdeaTokenNameVerifier nameVerifier;
+    ITokenNameVerifier nameVerifier;
     uint numTokens;
 
     uint baseCost;
@@ -41,18 +42,18 @@ struct MarketDetails {
     bool allInterestToPlatform;
 }
 
-interface IIdeaTokenFactory {
+interface ITokenFactory {
     function addMarket(string calldata marketName, address nameVerifier,
                        uint baseCost, uint priceRise, uint hatchTokens,
                        uint tradingFeeRate, uint platformFeeRate, bool allInterestToPlatform) external;
 
-    function addToken(string calldata tokenName, uint marketID, address lister) external;
+    function addToken(uint256 serviceId, string calldata tokenName, uint marketID, address lister) external;
 
     function isValidTokenName(string calldata tokenName, uint marketID) external view returns (bool);
     function getMarketIDByName(string calldata marketName) external view returns (uint);
     function getMarketDetailsByID(uint marketID) external view returns (MarketDetails memory);
     function getMarketDetailsByName(string calldata marketName) external view returns (MarketDetails memory);
-    function getMarketDetailsByTokenAddress(address ideaToken) external view returns (MarketDetails memory);
+    function getMarketDetailsByTokenAddress(address serviceToken) external view returns (MarketDetails memory);
     function getNumMarkets() external view returns (uint);
     function getTokenIDByName(string calldata tokenName, uint marketID) external view returns (uint);
     function getTokenInfo(uint marketID, uint tokenID) external view returns (TokenInfo memory);

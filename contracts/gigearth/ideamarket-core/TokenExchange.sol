@@ -2,31 +2,36 @@
 pragma solidity 0.6.9;
 pragma experimental ABIEncoderV2;
 
-import "../../shared/util/Ownable.sol";
-import "../../shared/core/interfaces/IIdeaTokenExchange.sol";
-import "../../shared/core/interfaces/IIdeaToken.sol";
-import "../../shared/core/interfaces/IIdeaTokenFactory.sol";
-import "./interfaces/IInterestManager.sol";
-import "../../shared/util/Initializable.sol";
+import "./Ownable.sol";
+import "./Initializable.sol";
+
+import "../interface/ITokenExchange.sol";
+import "../interface/IServiceToken.sol";
+import "../interface/ITokenFactory.sol";
+import "../interface/IInterestManager.sol";
+
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC1155.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 /**
- * @title IdeaTokenExchange
+ * @title ITokenExchange (Originally: IdeaTokenExchange)
  * @author Alexander Schlindwein
  *
- * Exchanges Dai <-> IdeaTokens using a bonding curve. Sits behind a proxy
+ * Exchanges Dai <-> ServiceTokens using a bonding curve. Sits behind a proxy
  */
-contract IdeaTokenExchange is IIdeaTokenExchange, Initializable, Ownable {
+contract TokenExchange is ITokenExchange, Initializable, Ownable {
     using SafeMath for uint256;
 
-    // Stored for every IdeaToken and market.
+    // Stored for every ServiceToken and market.
     // Keeps track of the amount of invested dai in this token, and the amount of investment tokens (e.g. cDai).
     struct ExchangeInfo {
         // The amount of Dai collected by trading
         uint dai;
         // The amount of "investment tokens", e.g. cDai
         uint invested; 
+        // The id of the specific token invested
+        uint256 id;
     }
 
     uint constant FEE_SCALE = 10000;
@@ -53,29 +58,29 @@ contract IdeaTokenExchange is IIdeaTokenExchange, Initializable, Ownable {
     // marketID => ExchangeInfo. Stores ExchangeInfo structs for platforms
     mapping(uint => ExchangeInfo) _platformsExchangeInfo;
 
-    // IdeaToken address => owner. The owner of an IdeaToken.
-    // This address is allowed to withdraw the interest for an IdeaToken
+    // ServiceToken address => owner. The owner of an ServiceToken.
+    // This address is allowed to withdraw the interest for an ServiceToken
     mapping(address => address) _tokenOwner;
-    // IdeaToken address => ExchangeInfo. Stores ExchangeInfo structs for IdeaTokens
+    // ServiceToken address => ExchangeInfo. Stores ExchangeInfo structs for ServiceTokens
     mapping(address => ExchangeInfo) _tokensExchangeInfo;
 
-    // IdeaTokenFactory contract
-    IIdeaTokenFactory _ideaTokenFactory;
+    // TokenFactory contract
+    ITokenFactory _tokenFactory;
     // InterestManager contract
     IInterestManager _interestManager;
     // Dai contract
     IERC20 _dai;
 
-    // IdeaToken address => bool. Whether or not to disable all fee collection for a specific IdeaToken.
+    // ServiceToken address => bool. Whether or not to disable all fee collection for a specific ServiceToken.
     mapping(address => bool) _tokenFeeKillswitch;
 
-    event NewTokenOwner(address ideaToken, address owner);
+    event NewTokenOwner(address serviceToken, address owner);
     event NewPlatformOwner(uint marketID, address owner);
 
-    event InvestedState(uint marketID, address ideaToken, uint dai, uint daiInvested, uint tradingFeeInvested, uint platformFeeInvested, uint volume);
+    event InvestedState(uint marketID, address serviceToken, uint tokenId, uint dai, uint daiInvested, uint tradingFeeInvested, uint platformFeeInvested, uint volume);
     
     event PlatformInterestRedeemed(uint marketID, uint investmentToken, uint daiRedeemed);
-    event TokenInterestRedeemed(address ideaToken, uint investmentToken, uint daiRedeemed);
+    event TokenInterestRedeemed(address serviceToken, uint investmentToken, uint daiRedeemed);
     event TradingFeeRedeemed(uint daiRedeemed);
     event PlatformFeeRedeemed(uint marketID, uint daiRedeemed);
     
@@ -106,33 +111,34 @@ contract IdeaTokenExchange is IIdeaTokenExchange, Initializable, Ownable {
     }
 
     /**
-     * Burns IdeaTokens in exchange for Dai
+     * Burns ServiceTokens in exchange for Dai
      *
-     * @param ideaToken The IdeaToken to sell
-     * @param amount The amount of IdeaTokens to sell
-     * @param minPrice The minimum allowed price in Dai for selling `amount` IdeaTokens
+     * @param serviceToken The ServiceToken to sell
+     * @param tokenId The id of the token
+     * @param amount The amount of ServiceTokens to sell
+     * @param minPrice The minimum allowed price in Dai for selling `amount` ServiceTokens
      * @param recipient The recipient of the redeemed Dai
      */
-    function sellTokens(address ideaToken, uint amount, uint minPrice, address recipient) external virtual override {
+    function sellTokens(address serviceToken, uint256 tokenId, uint amount, uint minPrice, address recipient) external virtual override {
 
-        MarketDetails memory marketDetails = _ideaTokenFactory.getMarketDetailsByTokenAddress(ideaToken);
+        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
         require(marketDetails.exists, "token-not-exist");
         uint marketID = marketDetails.id;
 
-        CostAndPriceAmounts memory amounts = getPricesForSellingTokens(marketDetails, IERC20(ideaToken).totalSupply(), amount, _tokenFeeKillswitch[ideaToken]);
+        CostAndPriceAmounts memory amounts = getPricesForSellingTokens(marketDetails, IERC1155(serviceToken).totalSupply(tokenId), amount, _tokenFeeKillswitch[serviceToken]);
 
         require(amounts.total >= minPrice, "below-min-price");
-        require(IIdeaToken(ideaToken).balanceOf(msg.sender) >= amount, "insufficient-tokens");
+        require(IIServiceToken(serviceToken).balanceOf(msg.sender, tokenId) >= amount, "insufficient-tokens");
         
-        IIdeaToken(ideaToken).burn(msg.sender, amount);
+        IServiceToken(serviceToken).burn(msg.sender, tokenId, amount);
 
         _interestManager.accrueInterest();
 
         ExchangeInfo storage exchangeInfo;
         if(marketDetails.allInterestToPlatform) {
-            exchangeInfo = _platformsExchangeInfo[marketID];
+            exchangeInfo = _platformsExchangeInfo[marketID]; //revisit
         } else {
-            exchangeInfo = _tokensExchangeInfo[ideaToken];
+            exchangeInfo = _tokensExchangeInfo[serviceToken];
         }
 
         uint tradingFeeInvested;
@@ -154,30 +160,31 @@ contract IdeaTokenExchange is IIdeaTokenExchange, Initializable, Ownable {
         exchangeInfo.dai = dai;
         }
 
-        emit InvestedState(marketID, ideaToken, dai, invested, tradingFeeInvested, platformFeeInvested, amounts.raw);
+        emit InvestedState(marketID, serviceToken, tokenId, dai, invested, tradingFeeInvested, platformFeeInvested, amounts.raw);
         require(_dai.transfer(recipient, amounts.total), "dai-transfer");
     }
 
 
     /**
-     * Returns the price for selling IdeaTokens
+     * Returns the price for selling ServiceTokens
      *
-     * @param ideaToken The IdeaToken to sell
-     * @param amount The amount of IdeaTokens to sell
+     * @param serviceToken The ServiceToken to sell
+     * @param tokenId The ID of the specific token to sell
+     * @param amount The amount of ServiceTokens to sell
      *
-     * @return The price in Dai for selling `amount` IdeaTokens
+     * @return The price in Dai for selling `amount` ServiceTokens
      */
-    function getPriceForSellingTokens(address ideaToken, uint amount) external virtual view override returns (uint) {
-        MarketDetails memory marketDetails = _ideaTokenFactory.getMarketDetailsByTokenAddress(ideaToken);
-        return getPricesForSellingTokens(marketDetails, IERC20(ideaToken).totalSupply(), amount, _tokenFeeKillswitch[ideaToken]).total;
+    function getPriceForSellingTokens(address serviceToken, uint256 tokenId, uint amount) external virtual view override returns (uint) {
+        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
+        return getPricesForSellingTokens(marketDetails, IERC1155(serviceToken).totalSupply(tokenId), amount, _tokenFeeKillswitch[serviceToken]).total;
     }
 
     /**
      * Calculates each price related to selling tokens
      *
      * @param marketDetails The market details
-     * @param supply The existing supply of the IdeaToken
-     * @param amount The amount of IdeaTokens to sell
+     * @param supply The existing supply of the ServiceToken
+     * @param amount The amount of ServiceTokens to sell
      *
      * @return total cost, raw cost and trading fee
      */
@@ -214,9 +221,9 @@ contract IdeaTokenExchange is IIdeaTokenExchange, Initializable, Ownable {
      * @param priceRise The priceRise of the token
      * @param hatchTokens The amount of hatch tokens
      * @param supply The current total supply of the token
-     * @param amount The amount of IdeaTokens to sell
+     * @param amount The amount of ServiceTokens to sell
      *
-     * @return The price selling `amount` IdeaTokens without any fees applied
+     * @return The price selling `amount` ServiceTokens without any fees applied
      */
     function getRawPriceForSellingTokens(uint baseCost, uint priceRise, uint hatchTokens, uint supply, uint amount) internal virtual pure returns (uint) {
 
@@ -249,21 +256,22 @@ contract IdeaTokenExchange is IIdeaTokenExchange, Initializable, Ownable {
     }
 
     /**
-     * Mints IdeaTokens in exchange for Dai
+     * Mints ServiceTokens in exchange for Dai
      *
-     * @param ideaToken The IdeaToken to buy
-     * @param amount The amount of IdeaTokens to buy
+     * @param serviceToken The ServiceToken to buy
+     * @param tokenId The id of the specific token to buy
+     * @param amount The amount of ServiceTokens to buy
      * @param fallbackAmount The fallback amount to buy in case the price changed
      * @param cost The maximum allowed cost in Dai
-     * @param recipient The recipient of the bought IdeaTokens
+     * @param recipient The recipient of the bought ServiceTokens
      */
-    function buyTokens(address ideaToken, uint amount, uint fallbackAmount, uint cost, address recipient) external virtual override {
-        MarketDetails memory marketDetails = _ideaTokenFactory.getMarketDetailsByTokenAddress(ideaToken);
+    function buyTokens(address serviceToken, uint256 tokenId, uint amount, uint fallbackAmount, uint cost, address recipient) external virtual override {
+        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
         require(marketDetails.exists, "token-not-exist");
         uint marketID = marketDetails.id;
 
-        uint supply = IERC20(ideaToken).totalSupply();
-        bool feesDisabled = _tokenFeeKillswitch[ideaToken];
+        uint supply = IERC1155(serviceToken).totalSupply(tokenId);
+        bool feesDisabled = _tokenFeeKillswitch[serviceToken];
         uint actualAmount = amount;
 
         CostAndPriceAmounts memory amounts = getCostsForBuyingTokens(marketDetails, supply, actualAmount, feesDisabled);
@@ -287,7 +295,7 @@ contract IdeaTokenExchange is IIdeaTokenExchange, Initializable, Ownable {
         if(marketDetails.allInterestToPlatform) {
             exchangeInfo = _platformsExchangeInfo[marketID];
         } else {
-            exchangeInfo = _tokensExchangeInfo[ideaToken];
+            exchangeInfo = _tokensExchangeInfo[serviceToken];
         }
 
         exchangeInfo.invested = exchangeInfo.invested.add(_interestManager.underlyingToInvestmentToken(amounts.raw));
@@ -297,30 +305,31 @@ contract IdeaTokenExchange is IIdeaTokenExchange, Initializable, Ownable {
         _platformFeeInvested[marketID] = platformFeeInvested;
         exchangeInfo.dai = exchangeInfo.dai.add(amounts.raw);
     
-        emit InvestedState(marketID, ideaToken, exchangeInfo.dai, exchangeInfo.invested, tradingFeeInvested, platformFeeInvested, amounts.total);
-        IIdeaToken(ideaToken).mint(recipient, actualAmount);
+        emit InvestedState(marketID, serviceToken, tokenId, exchangeInfo.dai, exchangeInfo.invested, tradingFeeInvested, platformFeeInvested, amounts.total);
+        IServiceToken(serviceToken).mint(recipient, tokenId, actualAmount, bytes(0));
     }
 
     /**
-     * Returns the cost for buying IdeaTokens
+     * Returns the cost for buying ServiceTokens
      *
-     * @param ideaToken The IdeaToken to buy
-     * @param amount The amount of IdeaTokens to buy
+     * @param serviceToken The ServiceToken to buy
+     * @param tokenId The id of the specific token to buy
+     * @param amount The amount of ServiceTokens to buy
      *
-     * @return The cost in Dai for buying `amount` IdeaTokens
+     * @return The cost in Dai for buying `amount` ServiceTokens
      */
-    function getCostForBuyingTokens(address ideaToken, uint amount) external virtual view override returns (uint) {
-        MarketDetails memory marketDetails = _ideaTokenFactory.getMarketDetailsByTokenAddress(ideaToken);
+    function getCostForBuyingTokens(address serviceToken, uint256 tokenId, uint amount) external virtual view override returns (uint) {
+        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
 
-        return getCostsForBuyingTokens(marketDetails, IERC20(ideaToken).totalSupply(), amount, _tokenFeeKillswitch[ideaToken]).total;
+        return getCostsForBuyingTokens(marketDetails, IERC1155(serviceToken).totalSupply(tokenId), amount, _tokenFeeKillswitch[serviceToken]).total;
     }
 
     /**
      * Calculates each cost related to buying tokens
      *
      * @param marketDetails The market details
-     * @param supply The existing supply of the IdeaToken
-     * @param amount The amount of IdeaTokens to buy
+     * @param supply The existing supply of the ServiceToken
+     * @param amount The amount of ServiceTokens to buy
      *
      * @return total cost, raw cost, trading fee, platform fee
      */
@@ -356,9 +365,9 @@ contract IdeaTokenExchange is IIdeaTokenExchange, Initializable, Ownable {
      * @param priceRise The priceRise of the token
      * @param hatchTokens The amount of hatch tokens
      * @param supply The current total supply of the token
-     * @param amount The amount of IdeaTokens to buy
+     * @param amount The amount of ServiceTokens to buy
      *
-     * @return The cost buying `amount` IdeaTokens without any fees applied
+     * @return The cost buying `amount` ServiceTokens without any fees applied
      */
     function getRawCostForBuyingTokens(uint baseCost, uint priceRise, uint hatchTokens, uint supply, uint amount) internal virtual pure returns (uint) {
 
@@ -566,33 +575,33 @@ contract IdeaTokenExchange is IIdeaTokenExchange, Initializable, Ownable {
     }
 
     /**
-     * Returns whether or not fees are disabled for a specific IdeaToken
+     * Returns whether or not fees are disabled for a specific ServiceToken
      *
-     * @param ideaToken The IdeaToken
+     * @param serviceToken The ServiceToken
      *
-     * @return Whether or not fees are disabled for a specific IdeaToken
+     * @return Whether or not fees are disabled for a specific ServiceToken
      */
-    function isTokenFeeDisabled(address ideaToken) external virtual view override returns (bool) {
-        return _tokenFeeKillswitch[ideaToken];
+    function isTokenFeeDisabled(address serviceToken) external virtual view override returns (bool) {
+        return _tokenFeeKillswitch[serviceToken];
     }
 
     /**
-     * Sets the fee killswitch for an IdeaToken
+     * Sets the fee killswitch for an ServiceToken
      *
-     * @param ideaToken The IdeaToken
+     * @param serviceToken The ServiceToken
      * @param set Whether or not to enable the killswitch
      */
-    function setTokenFeeKillswitch(address ideaToken, bool set) external virtual override onlyOwner {
-        _tokenFeeKillswitch[ideaToken] = set;
+    function setTokenFeeKillswitch(address serviceToken, bool set) external virtual override onlyOwner {
+        _tokenFeeKillswitch[serviceToken] = set;
     }
 
     /**
-     * Sets the IdeaTokenFactory address. Only required once for deployment
+     * Sets the TokenFactory address. Only required once for deployment
      *
-     * @param factory The address of the IdeaTokenFactory 
+     * @param factory The address of the TokenFactory 
      */
-    function setIdeaTokenFactoryAddress(address factory) external virtual onlyOwner {
-        require(address(_ideaTokenFactory) == address(0));
-        _ideaTokenFactory = IIdeaTokenFactory(factory);
+    function setTokenFactoryAddress(address factory) external virtual onlyOwner {
+        require(address(_tokenFactory) == address(0));
+        _tokenFactory = IITokenFactory(factory);
     }
 }
