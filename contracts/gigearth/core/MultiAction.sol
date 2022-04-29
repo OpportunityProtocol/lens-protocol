@@ -2,7 +2,7 @@
 pragma solidity 0.6.9;
 pragma experimental ABIEncoderV2;
 
-import "../weth/IWETH.sol";
+import "../interface/IWETH.sol";
 import "../interface/IUniswapV2Factory.sol";
 import "../interface/IUniswapV2Router02.sol";
 import "./interface/ITokenExchange.sol";

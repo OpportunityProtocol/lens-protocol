@@ -9,7 +9,7 @@ import "../interface/ITokenFactory.sol";
 import "./ServiceToken.sol";
 import "../interfaces/IServiceToken.sol";
 import "./ITokenNameVerifier.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 /**
  * @title ITokenFactory (Originally: IdeaTokenFactory)

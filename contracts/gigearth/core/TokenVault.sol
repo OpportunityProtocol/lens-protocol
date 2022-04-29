@@ -6,7 +6,7 @@ import "../interface/ITokenVault.sol";
 import "../interface/ITokenFactory.sol";
 import "./Ownable.sol";
 import "./Initializable.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**

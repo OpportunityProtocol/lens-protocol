@@ -11,7 +11,7 @@ import "../interface/ITokenFactory.sol";
 import "../interface/IInterestManager.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 /**
  * @title ITokenExchange (Originally: IdeaTokenExchange)
