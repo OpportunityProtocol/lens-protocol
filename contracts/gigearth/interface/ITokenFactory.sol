@@ -3,7 +3,6 @@ pragma solidity 0.6.9;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC1155.sol";
 import "./IServiceToken.sol";
 import "./ITokenNameVerifier.sol";
 
@@ -47,7 +46,7 @@ interface ITokenFactory {
                        uint baseCost, uint priceRise, uint hatchTokens,
                        uint tradingFeeRate, uint platformFeeRate, bool allInterestToPlatform) external;
 
-    function addToken(uint256 serviceId, string calldata tokenName, uint marketID, address lister) external;
+    function addToken(string calldata tokenName, uint marketID, address lister) external;
 
     function isValidTokenName(string calldata tokenName, uint marketID) external view returns (bool);
     function getMarketIDByName(string calldata marketName) external view returns (uint);

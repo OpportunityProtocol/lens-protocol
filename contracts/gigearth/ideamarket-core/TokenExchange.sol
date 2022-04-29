@@ -11,7 +11,6 @@ import "../interface/ITokenFactory.sol";
 import "../interface/IInterestManager.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC1155.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 /**
@@ -77,7 +76,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
     event NewTokenOwner(address serviceToken, address owner);
     event NewPlatformOwner(uint marketID, address owner);
 
-    event InvestedState(uint marketID, address serviceToken, uint tokenId, uint dai, uint daiInvested, uint tradingFeeInvested, uint platformFeeInvested, uint volume);
+    event InvestedState(uint marketID, address serviceToken, uint dai, uint daiInvested, uint tradingFeeInvested, uint platformFeeInvested, uint volume);
     
     event PlatformInterestRedeemed(uint marketID, uint investmentToken, uint daiRedeemed);
     event TokenInterestRedeemed(address serviceToken, uint investmentToken, uint daiRedeemed);
@@ -114,23 +113,22 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      * Burns ServiceTokens in exchange for Dai
      *
      * @param serviceToken The ServiceToken to sell
-     * @param tokenId The id of the token
      * @param amount The amount of ServiceTokens to sell
      * @param minPrice The minimum allowed price in Dai for selling `amount` ServiceTokens
      * @param recipient The recipient of the redeemed Dai
      */
-    function sellTokens(address serviceToken, uint256 tokenId, uint amount, uint minPrice, address recipient) external virtual override {
+    function sellTokens(address serviceToken, uint amount, uint minPrice, address recipient) external virtual override {
 
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
         require(marketDetails.exists, "token-not-exist");
         uint marketID = marketDetails.id;
 
-        CostAndPriceAmounts memory amounts = getPricesForSellingTokens(marketDetails, IERC1155(serviceToken).totalSupply(tokenId), amount, _tokenFeeKillswitch[serviceToken]);
+        CostAndPriceAmounts memory amounts = getPricesForSellingTokens(marketDetails, IERC20(serviceToken).totalSupply(), amount, _tokenFeeKillswitch[serviceToken]);
 
         require(amounts.total >= minPrice, "below-min-price");
-        require(IIServiceToken(serviceToken).balanceOf(msg.sender, tokenId) >= amount, "insufficient-tokens");
+        require(IIServiceToken(serviceToken).balanceOf(msg.sender) >= amount, "insufficient-tokens");
         
-        IServiceToken(serviceToken).burn(msg.sender, tokenId, amount);
+        IServiceToken(serviceToken).burn(msg.sender, amount);
 
         _interestManager.accrueInterest();
 
@@ -160,7 +158,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         exchangeInfo.dai = dai;
         }
 
-        emit InvestedState(marketID, serviceToken, tokenId, dai, invested, tradingFeeInvested, platformFeeInvested, amounts.raw);
+        emit InvestedState(marketID, serviceToken, dai, invested, tradingFeeInvested, platformFeeInvested, amounts.raw);
         require(_dai.transfer(recipient, amounts.total), "dai-transfer");
     }
 
@@ -169,14 +167,13 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      * Returns the price for selling ServiceTokens
      *
      * @param serviceToken The ServiceToken to sell
-     * @param tokenId The ID of the specific token to sell
      * @param amount The amount of ServiceTokens to sell
      *
      * @return The price in Dai for selling `amount` ServiceTokens
      */
-    function getPriceForSellingTokens(address serviceToken, uint256 tokenId, uint amount) external virtual view override returns (uint) {
+    function getPriceForSellingTokens(address serviceToken, uint amount) external virtual view override returns (uint) {
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
-        return getPricesForSellingTokens(marketDetails, IERC1155(serviceToken).totalSupply(tokenId), amount, _tokenFeeKillswitch[serviceToken]).total;
+        return getPricesForSellingTokens(marketDetails, IERC20(serviceToken).totalSupply(), amount, _tokenFeeKillswitch[serviceToken]).total;
     }
 
     /**
@@ -259,18 +256,17 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      * Mints ServiceTokens in exchange for Dai
      *
      * @param serviceToken The ServiceToken to buy
-     * @param tokenId The id of the specific token to buy
      * @param amount The amount of ServiceTokens to buy
      * @param fallbackAmount The fallback amount to buy in case the price changed
      * @param cost The maximum allowed cost in Dai
      * @param recipient The recipient of the bought ServiceTokens
      */
-    function buyTokens(address serviceToken, uint256 tokenId, uint amount, uint fallbackAmount, uint cost, address recipient) external virtual override {
+    function buyTokens(address serviceToken, uint amount, uint fallbackAmount, uint cost, address recipient) external virtual override {
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
         require(marketDetails.exists, "token-not-exist");
         uint marketID = marketDetails.id;
 
-        uint supply = IERC1155(serviceToken).totalSupply(tokenId);
+        uint supply = IERC20(serviceToken).totalSupply();
         bool feesDisabled = _tokenFeeKillswitch[serviceToken];
         uint actualAmount = amount;
 
@@ -305,23 +301,22 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         _platformFeeInvested[marketID] = platformFeeInvested;
         exchangeInfo.dai = exchangeInfo.dai.add(amounts.raw);
     
-        emit InvestedState(marketID, serviceToken, tokenId, exchangeInfo.dai, exchangeInfo.invested, tradingFeeInvested, platformFeeInvested, amounts.total);
-        IServiceToken(serviceToken).mint(recipient, tokenId, actualAmount, bytes(0));
+        emit InvestedState(marketID, serviceToken, exchangeInfo.dai, exchangeInfo.invested, tradingFeeInvested, platformFeeInvested, amounts.total);
+        IServiceToken(serviceToken).mint(recipient,  actualAmount, bytes(0));
     }
 
     /**
      * Returns the cost for buying ServiceTokens
      *
      * @param serviceToken The ServiceToken to buy
-     * @param tokenId The id of the specific token to buy
      * @param amount The amount of ServiceTokens to buy
      *
      * @return The cost in Dai for buying `amount` ServiceTokens
      */
-    function getCostForBuyingTokens(address serviceToken, uint256 tokenId, uint amount) external virtual view override returns (uint) {
+    function getCostForBuyingTokens(address serviceToken, uint amount) external virtual view override returns (uint) {
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
 
-        return getCostsForBuyingTokens(marketDetails, IERC1155(serviceToken).totalSupply(tokenId), amount, _tokenFeeKillswitch[serviceToken]).total;
+        return getCostsForBuyingTokens(marketDetails, IERC20(serviceToken).totalSupply(), amount, _tokenFeeKillswitch[serviceToken]).total;
     }
 
     /**

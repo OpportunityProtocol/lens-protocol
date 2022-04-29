@@ -3,11 +3,11 @@ pragma solidity 0.6.9;
 pragma experimental ABIEncoderV2;
 
 import "../weth/IWETH.sol";
-import "../uniswap/IUniswapV2Factory.sol";
-import "../uniswap/IUniswapV2Router02.sol";
-import "./interfaces/IIdeaTokenExchange.sol";
-import "./interfaces/IIdeaTokenFactory.sol";
-import "./interfaces/IIdeaTokenVault.sol";
+import "../interface/IUniswapV2Factory.sol";
+import "../interface/IUniswapV2Router02.sol";
+import "./interface/ITokenExchange.sol";
+import "./interface/ITokenFactory.sol";
+import "./interface/ITokenVault.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
@@ -19,11 +19,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract MultiAction {
 
     // IdeaTokenExchange contract
-    IIdeaTokenExchange _ideaTokenExchange;
+    ITokenExchange _ideaTokenExchange;
     // IdeaTokenFactory contract
-    IIdeaTokenFactory _ideaTokenFactory;
+    ITokenFactory _ideaTokenFactory;
     // IdeaTokenVault contract
-    IIdeaTokenVault _ideaTokenVault;
+    ITokenVault _ideaTokenVault;
     // Dai contract
     IERC20 public _dai;
     // IUniswapV2Factory contract

@@ -17,10 +17,10 @@ struct CostAndPriceAmounts {
 }
 
 interface IIdeaTokenExchange {
-    function sellTokens(address serviceToken, uint256 tokenId, uint amount, uint minPrice, address recipient) external;
-    function getPriceForSellingTokens(address serviceToken, uint256 tokenId, uint amount) external view returns (uint);
+    function sellTokens(address serviceToken, uint amount, uint minPrice, address recipient) external;
+    function getPriceForSellingTokens(address serviceToken, uint amount) external view returns (uint);
     function getPricesForSellingTokens(MarketDetails memory marketDetails, uint supply, uint amount, bool feesDisabled) external pure returns (CostAndPriceAmounts memory);
-    function buyTokens(address serviceToken, uint256 tokenId, uint amount, uint fallbackAmount, uint cost, address recipient) external;
+    function buyTokens(address serviceToken, uint amount, uint fallbackAmount, uint cost, address recipient) external;
     function getCostForBuyingTokens(address serviceToken, uint amount) external view returns (uint);
     function getCostsForBuyingTokens(MarketDetails memory marketDetails, uint supply, uint amount, bool feesDisabled) external pure returns (CostAndPriceAmounts memory);
     function setTokenOwner(address serviceToken, address owner) external;

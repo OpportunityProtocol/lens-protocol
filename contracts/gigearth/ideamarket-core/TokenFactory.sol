@@ -141,12 +141,11 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     /**
      * Adds a new ServiceToken using MinimalProxy
      *
-     * @param serviceId The service this token represents
      * @param tokenName The name of the token
      * @param marketID The ID of the market
      * @param lister The address of the account which off-chain software shall see as lister of this token. Only emitted, not stored
      */
-    function addToken(uint256 serviceId, string calldata tokenName, uint marketID, address lister) external virtual override {
+    function addToken(string calldata tokenName, uint marketID, address lister) external virtual override {
         MarketInfo storage marketInfo = _markets[marketID];
         require(marketInfo.marketDetails.exists, "market-not-exist");
         require(isValidTokenName(tokenName, marketID), "invalid-name");
@@ -154,7 +153,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
         IServiceToken serviceToken = IServiceToken(address(new MinimalProxy(_tokenLogic)));
         serviceToken.initialize(string(abi.encodePacked(marketInfo.marketDetails.name, ": ", tokenName)), _tokenExchange);
 
-        uint tokenID = serviceId; //++marketInfo.marketDetails.numTokens;
+        uint tokenID = ++marketInfo.marketDetails.numTokens;
         TokenInfo memory tokenInfo = TokenInfo({
             exists: true,
             id: tokenID,
