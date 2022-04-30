@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.6.9;
+pragma solidity ^0.8.7;
 pragma experimental ABIEncoderV2;
 
 import "./Ownable.sol";
@@ -126,7 +126,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         CostAndPriceAmounts memory amounts = getPricesForSellingTokens(marketDetails, IERC20(serviceToken).totalSupply(), amount, _tokenFeeKillswitch[serviceToken]);
 
         require(amounts.total >= minPrice, "below-min-price");
-        require(IIServiceToken(serviceToken).balanceOf(msg.sender) >= amount, "insufficient-tokens");
+        require(IServiceToken(serviceToken).balanceOf(msg.sender) >= amount, "insufficient-tokens");
         
         IServiceToken(serviceToken).burn(msg.sender, amount);
 
@@ -302,7 +302,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         exchangeInfo.dai = exchangeInfo.dai.add(amounts.raw);
     
         emit InvestedState(marketID, serviceToken, exchangeInfo.dai, exchangeInfo.invested, tradingFeeInvested, platformFeeInvested, amounts.total);
-        IServiceToken(serviceToken).mint(recipient,  actualAmount, bytes(0));
+        IServiceToken(serviceToken).mint(recipient,  actualAmount);
     }
 
     /**
@@ -597,6 +597,6 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      */
     function setTokenFactoryAddress(address factory) external virtual onlyOwner {
         require(address(_tokenFactory) == address(0));
-        _tokenFactory = IITokenFactory(factory);
+        _tokenFactory = ITokenFactory(factory);
     }
 }

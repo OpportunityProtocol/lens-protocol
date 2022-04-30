@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.6.9;
+pragma solidity ^0.8.7;
 pragma experimental ABIEncoderV2;
 
 import "./ITokenFactory.sol";
@@ -16,7 +16,7 @@ struct CostAndPriceAmounts {
     uint platformFee;
 }
 
-interface IIdeaTokenExchange {
+interface ITokenExchange {
     function sellTokens(address serviceToken, uint amount, uint minPrice, address recipient) external;
     function getPriceForSellingTokens(address serviceToken, uint amount) external view returns (uint);
     function getPricesForSellingTokens(MarketDetails memory marketDetails, uint supply, uint amount, bool feesDisabled) external pure returns (CostAndPriceAmounts memory);

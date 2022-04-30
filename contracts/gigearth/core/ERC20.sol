@@ -7,9 +7,9 @@
     This allows this contract to be used with MinimalProxy.
 */
 
-pragma solidity 0.6.9;
+pragma solidity ^0.8.7;
 
-import "@openzeppelin/contracts/utils/math//SafeMath.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 

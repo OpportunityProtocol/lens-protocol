@@ -10,7 +10,6 @@ library NetworkInterface {
     error InvalidRuling(uint256 _ruling, uint256 _numberOfChoices);
 
     struct Relationship {
-        address valuePtr;
         uint256 id;
         uint256 marketPtr;
         address employer;

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.6.9;
+pragma solidity ^0.8.7;
 pragma experimental ABIEncoderV2;
 
 import "./MinimalProxy.sol";
@@ -7,10 +7,11 @@ import "./Initializable.sol";
 import "./Ownable.sol";
 import "../interface/ITokenFactory.sol";
 import "./ServiceToken.sol";
-import "../interfaces/IServiceToken.sol";
-import "./ITokenNameVerifier.sol";
+import "../interface/IServiceToken.sol";
+import "../interface/ITokenNameVerifier.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
+import "../interface/INetworkManager.sol";
 /**
  * @title ITokenFactory (Originally: IdeaTokenFactory)
  * @author Alexander Schlindwein
@@ -50,6 +51,10 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     // The amount of existing markets.
     uint _numMarkets;
 
+    mapping (string => MarketInfo) _marketInfo;
+
+    INetworkManager _networkManager;
+
     event NewMarket(uint id,
                     string name,
                     uint baseCost,
@@ -65,17 +70,22 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     event NewPlatformFee(uint marketID, uint platformFeeRate);
     event NewNameVerifier(uint marketID, address nameVerifier);
 
+    modifier onlyNetworkManager() {
+        _;
+    }
+
     /**
      * Initializes the contract with all required values
      *
      * @param owner The owner of the contract (Should be network manager)
      */
-    function initialize(address owner, address tokenExchange, address tokenLogic) external virtual initializer {
+    function initialize(address owner, address tokenExchange, address tokenLogic, address networkManager) external virtual initializer {
         require(tokenExchange != address(0) && tokenLogic != address(0), "invalid-params");
 
         setOwnerInternal(owner); // Checks owner to be non-zero
-        _tokenExchange = ideaTokenExchange;
-        _tokenLogic = ideaTokenLogic;
+        _tokenExchange = tokenExchange;
+        _tokenLogic = tokenLogic;
+        networkManager = INetworkManager(networkManager);
     }
 
     /**
@@ -93,7 +103,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
      */
     function addMarket(string calldata marketName, address nameVerifier,
                        uint baseCost, uint priceRise, uint hatchTokens,
-                       uint tradingFeeRate, uint platformFeeRate, bool allInterestToPlatform) external virtual override onlyOwner {
+                       uint tradingFeeRate, uint platformFeeRate, bool allInterestToPlatform) external virtual override onlyOwner returns(uint256) {
         require(_marketIDs[marketName] == 0, "market-exists");
 
         require(nameVerifier != address(0) &&
@@ -102,9 +112,8 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
                 "invalid-params");
 
         uint marketID = ++_numMarkets;
-
-        MarketInfo memory marketInfo = MarketInfo({
-            marketDetails: MarketDetails({
+        MarketInfo storage info = _marketInfo[marketName];
+        info.marketDetails = MarketDetails({
                 exists: true,
                 id: marketID,
                 name: marketName,
@@ -116,13 +125,11 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
                 tradingFeeRate: tradingFeeRate,
                 platformFeeRate: platformFeeRate,
                 allInterestToPlatform: allInterestToPlatform
-            })
         });
-
-        _markets[marketID] = marketInfo;
         _marketIDs[marketName] = marketID;
 
-        emitNewMarketEvent(marketInfo.marketDetails);
+        emitNewMarketEvent(info.marketDetails);
+        return marketID;
     }
 
     /// Stack too deep if we do it directly in `addMarket`
@@ -145,7 +152,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
      * @param marketID The ID of the market
      * @param lister The address of the account which off-chain software shall see as lister of this token. Only emitted, not stored
      */
-    function addToken(string calldata tokenName, uint marketID, address lister) external virtual override {
+    function addToken(string calldata tokenName, uint marketID, address lister) external virtual override onlyNetworkManager {
         MarketInfo storage marketInfo = _markets[marketID];
         require(marketInfo.marketDetails.exists, "market-not-exist");
         require(isValidTokenName(tokenName, marketID), "invalid-name");
@@ -158,7 +165,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
             exists: true,
             id: tokenID,
             name: tokenName,
-            ideaToken: serviceToken
+            serviceToken: serviceToken
         });
 
         marketInfo.tokens[tokenID] = tokenInfo;

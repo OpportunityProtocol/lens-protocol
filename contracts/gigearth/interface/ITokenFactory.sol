@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.6.9;
+pragma solidity ^0.8.7;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -44,7 +44,7 @@ struct MarketDetails {
 interface ITokenFactory {
     function addMarket(string calldata marketName, address nameVerifier,
                        uint baseCost, uint priceRise, uint hatchTokens,
-                       uint tradingFeeRate, uint platformFeeRate, bool allInterestToPlatform) external;
+                       uint tradingFeeRate, uint platformFeeRate, bool allInterestToPlatform) external returns(uint256);
 
     function addToken(string calldata tokenName, uint marketID, address lister) external;
 

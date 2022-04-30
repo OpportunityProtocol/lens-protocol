@@ -8,34 +8,18 @@ import "../libraries/DataTypes.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import { 
-    Relationship, 
-    Market, 
-    UserSummary, 
-    RelationshipEscrowDetails, 
-    Service, 
-    RulingOptions, 
-    EscrowStatus, 
-    Persona, 
-    ContractOwnership, 
-    ContractStatus, 
-    ContractPayout,
-    InvalidStatus,
-    ReleasedTooEarly,
-    NotPayer,
-    NotArbitrator,
-    ThirdPartyNotAllowed,
-    PayeeDepositStillDepending,
-    RelcaimedTooLate,
-    InsufficientPayment,
-    InvalidRuling
-} from '../libraries/NetworkInterface.sol';
+import "./libraries/NetworkInterface.sol";
+import "./interface/ITokenFactory.sol";
+import "./core/TokenExchange.sol";
+import "./interface/INetworkManager.sol";
 
 interface IContentReferenceModule {
     function getPubIdByRelationship(uint256 _id) external view returns(uint256);
 }
 
-contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
+contract NetworkManager is INetworkManager, IArbitrable, IEvidence, TokenExchange {
+    using Queue for Queue.AddressQueue;
+
     /**
      */
     event UserRegistered(address indexed universalAddress);
@@ -68,12 +52,13 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
      */
     event ContractOwnershipUpdate();
 
-    UserSummary[] private userSummaries;
-    Market[] public markets;
+    /**
+     */
+    event OperationResult(address data);
+
     IArbitrator immutable arbitrator;
     ILensHub immutable public lensHub;
 
-    uint256 numRelationships;
     uint256 constant numberOfRulingOptions = 2;
     uint256 public constant arbitrationFeeDepositPeriod = 1;
     uint8 public constant OPPORTUNITY_WITHDRAWAL_FEE = 10;
@@ -84,30 +69,46 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
     address LENS_CONTENT_REFERENCE_MODULE;
     
     mapping(address => address) private universalAddressToSummaryAddress;
-    mapping(address => UserSummary) public universalAddressToUserSummary;
-    mapping(uint256 => UserSummary) private lensProfileIdToSummary;
-    mapping(uint256 => Market) public marketIDToMarket;
-    mapping(uint256 => Relationship)
-        public relationshipIDToRelationship;
-    mapping(uint256 => uint256) public relationshipIDToMilestones;
-    mapping(uint256 => uint256) public relationshipIDToCurrentMilestoneIndex;
-    mapping(uint256 => uint256) public relationshipIDToDeadline;
+    mapping(uint256 => address) private lensProfileIdToSummary;
+    mapping(address => uint256) public addressToLensProfileId;
+
     mapping(uint256 => uint256) public disputeIDtoRelationshipID;
-    mapping(uint256 => RelationshipEscrowDetails) public relationshipIDToEscrowDetails;
+    mapping(uint256 => NetworkInterface.RelationshipEscrowDetails) public relationshipIDToEscrowDetails;
     mapping(address => bool) public universalAddressToAutomatedActions;
 
-    Service[] public services;
-    mapping(uint256 => Service) public serviceIdToService;
-    mapping(uint256 => address[]) public serviceIdToWaitlist; //waitlist for a given service id
+    NetworkInterface.Relationship[] public relationships;
+    mapping(uint256 => NetworkInterface.Relationship) public relationshipIDToRelationship;
+
+    NetworkInterface.Service[] public services;
+    mapping(uint256 => NetworkInterface.Service) public serviceIdToService;
+    mapping(uint256 => mapping(address => NetworkInterface.ClaimedServiceMetadata[])) public serviceIdToWaitlist; //waitlist for a given service id
+    mapping(uint256 => uint256) public serviceIdToWaitlistSize;
     mapping(uint256 => uint256) public serviceIdToMaxWaitlistSize;
 
+    mapping(uint256 => uint256) public relationshipIDToMarketID;
+
+    mapping(uint256 => Queue.ClaimedService) public serviceIdToWaitlist;
+
+
+    modifier notServiceOwner() {
+        _;
+    }
+
+    modifier onlyServiceClient() {
+        _;
+    }
+
+    modifier onlyOwnerOrDispatcherOfLensProfileId() {
+        _;
+    }
+    
     modifier onlyGovernance() {
         require(msg.sender == governance);
         _;
     }
 
-    modifier onlyWhenStatus(uint256 _relationshipID, ContractStatus _status) {
-        Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
+    modifier onlyWhenStatus(uint256 _relationshipID, NetworkInterface.ContractStatus _status) {
+        NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
         require(relationship.contractStatus == _status);
         _;
     }
@@ -116,7 +117,8 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
         address _governance,
         address _treasury,
         address _arbitrator, 
-        address _lensHub
+        address _lensHub,
+        address tokenFactory
     ) 
     {
         governance = _governance;
@@ -142,72 +144,36 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
         lensHub.createProfile(vars);
         uint256 lensProfileId = lensHub.getProfileIdByHandle(vars.handle);
 
-        //create and store user summary
-        universalAddressToSummaryAddress[msg.sender] = new address(UserSummary(msg.sender, lensProfileId, vars.contentUri)); //_createUserSummary(msg.sender, lensProfileId);
-    
+        lensProfileIdToSummary[lensProfileId] = msg.sender;
+        addressToLensProfileId[msg.sender] = lensProfileId;
+
         emit UserRegistered(msg.sender);
-    }
-
-    function _createUserSummary(address _universalAddress, uint256 _lendsID) internal returns(UserSummary memory) {
-        UserSummary memory userSummary = UserSummary({
-            lensProfileID: _lendsID,
-            registrationTimestamp: block.timestamp,
-            trueIdentification: _universalAddress,
-            isRegistered: true,
-            referenceFee: 0
-        });
-
-         userSummaries.push(userSummary);
-
-        emit UserSummaryCreated(userSummary.registrationTimestamp, userSummaries.length, _universalAddress);
-        return userSummary;
     }
 
     function submitReview(
         uint256 _relationshipID, 
         string calldata _reviewHash
-    ) external {
-        Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
-
-        require(relationship.contractStatus == ContractStatus.Resolved);
-        require(block.timestamp < relationship.resolutionTimestamp + 30 days);
-
-        uint256 pubIdPointed = IContentReferenceModule(LENS_CONTENT_REFERENCE_MODULE).getPubIdByRelationship(_relationshipID);
-
-        bytes memory t;
-        DataTypes.CommentData memory commentData = DataTypes.CommentData({
-            profileId: universalAddressToSummary[relationship.employer].lensProfileID,
-            contentURI: _reviewHash,
-            profileIdPointed:  universalAddressToSummary[relationship.worker].lensProfileID,
-            pubIdPointed: pubIdPointed,
-            collectModule: address(0),
-            collectModuleData: t,
-            referenceModule: address(0),
-            referenceModuleData: t
-        });
-
-        lensHub.comment(commentData);
-    }
+    ) external {}
 
     function _isRegisteredUser(address userAddress) public view returns(bool) {
-        return universalAddressToSummary[userAddress] != address(0);
+        return universalAddressToSummaryAddress[userAddress] != address(0);
     }
 
     ///////////////////////////////////////////// Service Functions
 
     function createService(
         uint256 marketId, 
-        string metadataPtr, 
+        string calldata metadataPtr, 
         uint256 wad, 
         uint256 initialWaitlistSize,
-        uint256 referralSharePayout
-        EIP712MintTokenSignature mintTokenSig
+        uint256 referralSharePayout,
+        DataTypes.EIP712Signature postSignature
     ) external {
         //compute service id
         uint256 serviceId = services.length;
 
         //create service
-        Service storage newService = Service({
+        NetworkInterface.Service memory newService = NetworkInterface.Service({
             marketId: marketId,
             owner: msg.sender,
             metadataPtr: metadataPtr,
@@ -219,36 +185,35 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
         });
 
         services.push(newService);
+        serviceIdToWaitlist[serviceId].initialize();
 
-        uint256 profileId = IUserSummary(universalAddressToSummary[msg.sender]).getLensProfileId();
+        bytes memory collectModuleInitData = abi.encode(serviceId);
+        bytes memory referenceModuleInitData = abi.encode(serviceId);
 
         //create lens post
-        DataTypes.PostData vars = DataTypes.PostData({
-            profileId: profileId,
+        DataTypes.PostWithSigData memory vars = DataTypes.PostWithSigData({
+            profileId: addressToLensProfileId[msg.sender],
             contentURI: metadataPtr,
-            collectModule: 0,
-            collectModuleData: bytes(0),
+            collectModule: address(0),
+            collectModuleInitData: collectModuleInitData,
             referenceModule: LENS_CONTENT_REFERENCE_MODULE,
-            referenceModuleData: bytes(0)
+            referenceModuleInitData: referenceModuleInitData,
+            sig: postSignature
         });
 
         lensHub.postWithSig(vars);
 
-        uint256 pubId = lensHub.getProfile(profileId).pubCount;
+        uint256 pubId = lensHub.getProfile(addressToLensProfileId[msg.sender]).pubCount;
 
-        _registerService(pubId, newService, mintTokenSig);
+        _registerService(pubId, newService, initialWaitlistSize);
+        _tokenFactory.addToken(metadataPtr, marketId, msg.sender);
     }
 
-    function _registerService(uint256 lensPublicationId, Service newService, uint256 initialWaitlistSize, EIP712MintTokenSignature sig) internal {
+    function _registerService(uint256 lensPublicationId, NetworkInterface.Service memory newService, uint256 initialWaitlistSize) internal {
         //add service
-        servicesIdToService[lensPublicationId] = newService;
-        serviceIdToWaitlist[lensPublicationId] = [];
+        serviceIdToService[lensPublicationId] = newService;
+      //  serviceIdToWaitlist[lensPublicationId] = [];
         serviceIdToMaxWaitlistSize[lensPublicationId] = initialWaitlistSize;
-
-        //mint one token to owner
-        IERC1155(universalAddressToSummaryAddress[msg.sender]).mint(newService.owner, newService.serviceId, 1, bytes(0));
-
-        //verify sig
     }
 
     /**
@@ -258,38 +223,44 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
      * @notice There is no mechanism to withdraw funds once a service has been purchased. All interactions should
      * be handled through gig earth incase of dispute.
      */
-    function purchaseServiceOffering(uint256 serviceId) public notServiceOwner {
+    function purchaseServiceOffering(uint256 serviceId, address referral) public notServiceOwner {
         uint256 currMaxWaitlistSize = serviceIdToMaxWaitlistSize[serviceId];
-        uint256 serviceWaitlistSize = serviceIdToWaitlist[serviceId].length;
+        uint256 serviceWaitlistSize = serviceIdToWaitlistSize[serviceId];
 
         require(serviceWaitlistSize <= currMaxWaitlistSize, "max waitlist reached");
-        serviceIdToWaitlist[serviceId].push(ClaimedServiceMetadata({
-            serviceId: serviceId,
+        
+        serviceIdToWaitlist[serviceId].enqueue(NetworkInterface.ClaimedServiceMetadata({
+            exist: true,
             client: msg.sender,
-            timestampPurchased: block.timestamp
+            timestampPurchased: block.timestamp,
+            referral: referral,
+            purchaseId: serviceIdToWaitlist[serviceId].length()
         }));
 
-        Service serviceDetails = serviceIdToService[serviceId];
-        daiToken.approve(address(this), serviceDetails.wad);
-        require(daiToken.transfer(address(this), serviceDetails.wad), "dai transfer");
+    //add at() and assign() to dequeue
+        NetworkInterface.Service memory serviceDetails = serviceIdToService[serviceId];
+        _dai.approve(address(this), serviceDetails.wad);
+        require(_dai.transfer(address(this), serviceDetails.wad), "dai transfer");
     }
 
     /**
      * Resolves a service offering
      * @param serviceId The id of the service to resolve
-     */
-    function resolveServiceOffering(uint256 serviceId) onlyServiceClient {
-        require(serviceIdToWaitlist[serviceId][serviceId].client == msg.sender);
-        
+     */ 
+    function resolveServiceOffering(uint256 serviceId, uint256 purchaseId) public onlyServiceClient {
+        NetworkInterface.ClaimedServiceMetadata memory metadata = serviceIdToWaitlist[serviceId];
+        require(metadata.client == msg.sender);
+        require(metadata.exist == true)
+
         uint256 networkFee;
         uint256 payout = serviceIdToService[serviceId].wad;
         if (serviceIdToWaitlist[serviceId][serviceId].referral != address(0)) {
             uint256 referralShare = payout - serviceIdToWaitlist[serviceId][serviceId].referralShare;
-            dai.transfer(serviceIdToWaitlist[serviceId][serviceId].referral, referralShare);
+            _dai.transfer(serviceIdToWaitlist[serviceId][serviceId].referral, referralShare);
             
             //calculate gig earth fee
             //TODO change network fee amount
-            networkFee = ((payout - referralShare) * .01)
+            networkFee = ((payout - referralShare) * .01);
         } else {
             //calculate gig earth fee
             //TODO change network fee amount
@@ -297,35 +268,31 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
         }
     
         uint256 ownerPayout = payout - networkFee;
-        daiToken.transfer(serviceIdToService[serviceId].owner, ownerPayout); //transfer dai from escrow to client
-        daiToken.transfer(treasury, networkFee); //transfer dai to gig earth treasruy
+        _dai.transfer(serviceIdToService[serviceId].owner, ownerPayout); //transfer dai from escrow to client
+        _dai.transfer(treasury, networkFee); //transfer dai to gig earth treasruy
 
         //remove from waitlist
         delete serviceIdToWaitlist[serviceId][serviceId]; //leaves a gap at index [serviceId]
     }
 
+    function cancelService() {}
+
     ///////////////////////////////////////////// Gig Functions
 
-    function initializeContract(
-        uint256 _relationshipID, 
-        uint256 _deadline, 
-        address _valuePtr, 
-        address _employer, 
+    function createContract(
         uint256 _marketID, 
         string calldata _taskMetadataPtr
     ) internal {
-        Relationship memory relationshipData = Relationship({
-                valuePtr: _valuePtr,
-                id: _relationshipID,
+        NetworkInterface.Relationship memory relationshipData = NetworkInterface.Relationship({
                 marketPtr: _marketID,
-                employer: _employer,
+                employer: msg.sender,
                 worker: address(0),
                 taskMetadataPtr: _taskMetadataPtr,
-                contractStatus: ContractStatus
+                contractStatus: NetworkInterface.ContractStatus
                     .AwaitingWorker,
-                contractOwnership: ContractOwnership
+                contractOwnership: NetworkInterface.ContractOwnership
                     .Unclaimed,
-                contractPayoutType: ContractPayoutType.Flat,
+                contractPayoutType: NetworkInterface.ContractPayoutType.Flat,
                 wad: 0,
                 acceptanceTimestamp: 0,
                 resolutionTimestamp: 0,
@@ -333,45 +300,38 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
                 solutionMetadataPtr: ""
             });
 
-        relationshipIDToRelationship[_relationshipID] = relationshipData;
-
-        if (_deadline != 0) {
-            relationshipIDToDeadline[_relationshipID] = _deadline;
-        }
-
-        numRelationships++;
+        relationships.push(relationshipData);
+        relationshipIDToRelationship[relationships.length - 1] = relationshipData;
     }
 
-    function grantProposalRequest(uint256 _relationshipID, address _newWorker, address _valuePtr,uint256 _wad, string memory _extraData) external onlyWhenStatus(_relationshipID, ContractStatus.AwaitingWorker)   {
-        Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
+    function grantProposalRequest(uint256 _relationshipID, address _newWorker, uint256 _wad, string memory _extraData) external onlyWhenStatus(_relationshipID, NetworkInterface.ContractStatus.AwaitingWorker)   {
+        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
 
         require(msg.sender == relationship.employer, "Only the employer of this relationship can grant the proposal.");
         require(_newWorker != address(0), "You must grant this proposal to a valid worker.");
         require(relationship.worker == address(0), "This job is already being worked.");
-        require(_valuePtr != address(0), "You must enter a valid address for the value pointer.");
         require(_wad != uint256(0),"The payout amount must be greater than 0.");
-        require(relationship.contractOwnership == ContractOwnership.Unclaimed,"This relationship must not already be claimed.");
+        require(relationship.contractOwnership == NetworkInterface.ContractOwnership.Unclaimed,"This relationship must not already be claimed.");
 
         relationship.wad = _wad;
-        relationship.valuePtr = _valuePtr;
         relationship.worker = _newWorker;
         relationship.acceptanceTimestamp = block.timestamp;
-        relationship.contractOwnership = ContractOwnership.Pending;
+        relationship.contractOwnership = NetworkInterface.ContractOwnership.Pending;
 
         emit ContractStatusUpdate();
         emit ContractOwnershipUpdate();
     }
 
-    function work(uint256 _relationshipID, string memory _extraData) external onlyWhenStatus(_relationshipID, ContractStatus.AwaitingWorker) {
-        Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
+    function work(uint256 _relationshipID, string memory _extraData) external onlyWhenStatus(_relationshipID, NetworkInterface.ContractStatus.AwaitingWorker) {
+        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
 
         require(msg.sender == relationship.worker);
-        require(relationship.contractOwnership == ContractOwnership.Pending);
+        require(relationship.contractOwnership == NetworkInterface.ContractOwnership.Pending);
 
         _initializeEscrowFundsAndTransfer(_relationshipID);
 
-        relationship.contractOwnership = ContractOwnership.Claimed;
-        relationship.contractStatus = ContractStatus.AwaitingResolution;
+        relationship.contractOwnership = NetworkInterface.ContractOwnership.Claimed;
+        relationship.contractStatus = NetworkInterface.ContractStatus.AwaitingResolution;
         relationship.acceptanceTimestamp = block.timestamp;
 
         emit EnteredContract();
@@ -379,9 +339,9 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
         emit ContractOwnershipUpdate();
     }
 
-    function releaseJob(uint256 _relationshipID) external onlyWhenStatus(_relationshipID, ContractStatus.AwaitingWorker)  {
-        Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
-        require(relationship.contractOwnership == ContractOwnership.Claimed);
+    function releaseJob(uint256 _relationshipID) external onlyWhenStatus(_relationshipID, NetworkInterface.ContractStatus.AwaitingWorker)  {
+        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
+        require(relationship.contractOwnership == NetworkInterface.ContractOwnership.Claimed);
 
         _surrenderFunds(_relationshipID);
         resetRelationshipState(relationship);
@@ -390,50 +350,44 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
         emit ContractOwnershipUpdate();
     }
 
-    function resetRelationshipState(Relationship storage relationship) internal {
+    function resetRelationshipState(NetworkInterface.Relationship storage relationship) internal {
         relationship.worker = address(0);
         relationship.acceptanceTimestamp = 0;
         relationship.wad = 0;
-        relationship.contractStatus = ContractStatus.AwaitingWorker;
-        relationship.contractOwnership = ContractOwnership.Unclaimed;
+        relationship.contractStatus = NetworkInterface.ContractStatus.AwaitingWorker;
+        relationship.contractOwnership = NetworkInterface.ContractOwnership.Unclaimed;
     }
 
-    function updateTaskMetadataPointer(uint256 _relationshipID, string calldata _newTaskPointerHash) external onlyWhenStatus(_relationshipID, ContractStatus.AwaitingWorker)  {
-        Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
+    function updateTaskMetadataPointer(uint256 _relationshipID, string calldata _newTaskPointerHash) external onlyWhenStatus(_relationshipID, NetworkInterface.ContractStatus.AwaitingWorker)  {
+        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
 
         require(msg.sender == relationship.employer);
-        require(relationship.contractOwnership == ContractOwnership.Unclaimed);
+        require(relationship.contractOwnership == NetworkInterface.ContractOwnership.Unclaimed);
 
         relationship.taskMetadataPtr = _newTaskPointerHash;
     }
     
     /* The final solution hash - can be called as long as resolveTraditional hasn't been called  */
-    function submitWork(uint256 _relationshipID, string calldata _solutionMetadataPtr) onlyWhenStatus(_relationshipID, ContractStatus.AwaitingWorker) external {
-        Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
+    function submitWork(uint256 _relationshipID, string calldata _solutionMetadataPtr) onlyWhenStatus(_relationshipID, NetworkInterface.ContractStatus.AwaitingWorker) external {
+        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
         require(msg.sender == relationship.worker, "Only the worker can call this function.");
 
         relationship.solutionMetadataPtr = _solutionMetadataPtr;
     }
 
     function resolveTraditional(uint256 _relationshipID, uint256 _satisfactoryScore) external   {
-        Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
+        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
 
         require(msg.sender == relationship.employer);
         require(relationship.worker != address(0));
         require(relationship.wad != uint256(0));
-        require(relationship.contractStatus == ContractStatus.AwaitingResolution);
+        require(relationship.contractStatus == NetworkInterface.ContractStatus.AwaitingResolution);
 
         bytes memory testEmptyString = bytes(relationship.solutionMetadataPtr);
         require(testEmptyString.length != 0, "Empty solution metadata pointer.");
 
-        if (relationship.contractPayoutType == ContractPayoutType.Flat) {
+        if (relationship.contractPayoutType == NetworkInterface.ContractPayoutType.Flat) {
             _resolveContractAndRewardWorker(_relationshipID);
-        } else {
-            if (relationshipIDToCurrentMilestoneIndex[_relationshipID] == relationshipIDToMilestones[_relationshipID] - 1) {
-                _resolveContractAndRewardWorker(_relationshipID);
-            } else {
-                relationshipIDToCurrentMilestoneIndex[_relationshipID]++;
-            }
         }
 
         relationship.satisfactoryScore = _satisfactoryScore;
@@ -444,86 +398,10 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
      * @notice Sets the contract status to resolved and releases the funds to the appropriate user.
      */
     function _resolveContractAndRewardWorker(uint256 _relationshipID) internal {
-        Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
+        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
          
         _releaseFunds(relationship.wad, _relationshipID);
-        relationship.contractStatus = ContractStatus.Resolved;
-    }
-
-    ///////////////////////////////////////////// Market Functions
-    function createMarket(
-        string memory _marketName,
-        address _valuePtr
-    ) public onlyGovernance returns (uint256) {
-        uint256 marketID = markets.length + 1;
-
-        Market memory newMarket = Market({
-            marketName: _marketName,
-            marketID: marketID,
-            relationships: new uint256[](0),
-            valuePtr: _valuePtr
-        });
-
-        markets.push(newMarket);
-        marketIDToMarket[marketID] = newMarket;
-
-        emit MarketCreated(
-            marketID,
-            msg.sender,
-            _marketName
-        );
-        
-        return markets.length;
-    }
-
-    /**
-     * @param _marketID The id of the market to create the relationship
-     * @param _taskMetadataPtr The hash on IPFS for the relationship metadata
-     * @param _deadline The deadline for the worker to complete the relationship
-     */
-    function createFlatRateRelationship(
-        uint256 _marketID, 
-        string calldata _taskMetadataPtr, 
-        uint256 _deadline
-    ) external {
-        Market storage market = marketIDToMarket[_marketID];
-        uint256 relationshipID = market.relationships.length + 1;
-        market.relationships.push(relationshipID);
-
-        initializeContract(
-            relationshipID,
-            _deadline,
-            market.valuePtr,
-            msg.sender,
-            _marketID,
-            _taskMetadataPtr
-        );
-    }
-
-    /**
-     * @param _marketID The id of the market to create the relationship
-     * @param _taskMetadataPtr The hash on IPFS for the relationship metadata
-     * @param _deadline The deadline for the worker to complete the relationship
-     * @param _numMilestones The number of milestones in this relationship
-     */
-    function createMilestoneRelationship(
-        uint256 _marketID, 
-        string calldata _taskMetadataPtr, 
-        uint256 _deadline, 
-        uint256 _numMilestones
-    ) external {
-        Market storage market = marketIDToMarket[_marketID];
-        uint256 relationshipID = market.relationships.length + 1;
-        market.relationships.push(relationshipID);
-
-        initializeContract(
-            relationshipID,
-            _deadline,
-            market.valuePtr,
-            msg.sender,
-            _marketID,
-            _taskMetadataPtr
-        );
+        relationship.contractStatus = NetworkInterface.ContractStatus.Resolved;
     }
 
     ///////////////////////////////////////////// Kleros
@@ -534,41 +412,41 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
      * @param _relationshipID The id of the relationship to begin a disputed state 
      */
     function disputeRelationship(uint256 _relationshipID) external payable {
-        Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
+        NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
 
-        RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
+        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
 
-        if (relationship.contractOwnership != ContractOwnership.Claimed) {
-            revert InvalidStatus();
+        if (relationship.contractOwnership != NetworkInterface.ContractOwnership.Claimed) {
+            revert NetworkInterface.InvalidStatus();
         }
 
         if (msg.sender != relationship.employer) {
-            revert NotPayer();
+            revert NetworkInterface.NotPayer();
         }
 
-        if (escrowDetails.status == EscrowStatus.Reclaimed) {
+        if (escrowDetails.status == NetworkInterface.EscrowStatus.Reclaimed) {
             if (
                 block.timestamp - escrowDetails.reclaimedAt <=
                 arbitrationFeeDepositPeriod
             ) {
-                revert PayeeDepositStillPending();
+                revert NetworkInterface.PayeeDepositStillPending();
             }
 
-            IERC20(relationship.valuePtr).transfer(relationship.worker,relationship.wad + escrowDetails.payerFeeDeposit);
-            escrowDetails.status = EscrowStatus.Resolved;
+            _dai.transfer(relationship.worker,relationship.wad + escrowDetails.payerFeeDeposit);
+            escrowDetails.status = NetworkInterface.EscrowStatus.Resolved;
 
-            relationship.contractStatus = ContractStatus.Resolved;
+            relationship.contractStatus = NetworkInterface.ContractStatus.Resolved;
         } else {
             uint256 requiredAmount = arbitrator.arbitrationCost("");
             if (msg.value < requiredAmount) {
-                revert InsufficientPayment(msg.value, requiredAmount);
+                revert NetworkInterface.InsufficientPayment(msg.value, requiredAmount);
             }
 
             escrowDetails.payerFeeDeposit = msg.value;
             escrowDetails.reclaimedAt = block.timestamp;
-            escrowDetails.status = EscrowStatus.Reclaimed;
+            escrowDetails.status = NetworkInterface.EscrowStatus.Reclaimed;
 
-            relationship.contractStatus = ContractStatus.Disputed;
+            relationship.contractStatus = NetworkInterface.ContractStatus.Disputed;
         }
     }
 
@@ -579,15 +457,15 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
         external
         payable
     {
-        RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
+        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
 
-        if (escrowDetails.status != EscrowStatus.Reclaimed) {
-            revert InvalidStatus();
+        if (escrowDetails.status != NetworkInterface.EscrowStatus.Reclaimed) {
+            revert NetworkInterface.InvalidStatus();
         }
 
         escrowDetails.payeeFeeDeposit = msg.value;
         escrowDetails.disputeID = arbitrator.createDispute{value: msg.value}(numberOfRulingOptions, "");
-        escrowDetails.status = EscrowStatus.Disputed;
+        escrowDetails.status = NetworkInterface.EscrowStatus.Disputed;
         disputeIDtoRelationshipID[escrowDetails.disputeID] = _relationshipID;
         emit Dispute(
             arbitrator,
@@ -602,29 +480,29 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
      */
     function rule(uint256 _disputeID, uint256 _ruling) public override {
         uint256 _relationshipID = disputeIDtoRelationshipID[_disputeID];
-        Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
-        RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
+        NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
+        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
 
         if (msg.sender != address(arbitrator)) {
-            revert NotArbitrator();
+            revert NetworkInterface.NotArbitrator();
         }
-        if (escrowDetails.status != EscrowStatus.Disputed) {
-            revert InvalidStatus();
+        if (escrowDetails.status != NetworkInterface.EscrowStatus.Disputed) {
+            revert NetworkInterface.InvalidStatus();
         }
         if (_ruling > numberOfRulingOptions) {
-            revert InvalidRuling(_ruling, numberOfRulingOptions);
+            revert NetworkInterface.InvalidRuling(_ruling, numberOfRulingOptions);
         }
-        escrowDetails.status = EscrowStatus.Resolved;
+        escrowDetails.status = NetworkInterface.EscrowStatus.Resolved;
 
-        if (_ruling == uint256(RulingOptions.PayerWins)) {
-            IERC20(relationship.valuePtr).transfer(relationship.employer, relationship.wad + escrowDetails.payerFeeDeposit);
+        if (_ruling == uint256(NetworkInterface.RulingOptions.PayerWins)) {
+            _dai.transfer(relationship.employer, relationship.wad + escrowDetails.payerFeeDeposit);
         } else {
-            IERC20(relationship.valuePtr).transfer(relationship.worker, relationship.wad + escrowDetails.payeeFeeDeposit);
+            _dai.transfer(relationship.worker, relationship.wad + escrowDetails.payeeFeeDeposit);
         }
 
         emit Ruling(arbitrator, _disputeID, _ruling);
 
-            relationship.contractStatus = ContractStatus.Resolved;
+            relationship.contractStatus = NetworkInterface.ContractStatus.Resolved;
     }
 
     /**
@@ -636,19 +514,19 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
     function submitEvidence(uint256 _relationshipID, string memory _evidence)
         public
     {
-         Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
-        RelationshipEscrowDetails
+         NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
+        NetworkInterface.RelationshipEscrowDetails
             storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
 
-        if (escrowDetails.status != EscrowStatus.Disputed) {
-            revert InvalidStatus();
+        if (escrowDetails.status != NetworkInterface.EscrowStatus.Disputed) {
+            revert NetworkInterface.InvalidStatus();
         }
 
         if (
             msg.sender != relationship.employer &&
             msg.sender != relationship.worker
         ) {
-            revert ThirdPartyNotAllowed();
+            revert NetworkInterface.ThirdPartyNotAllowed();
         }
 
         emit Evidence(
@@ -664,10 +542,10 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
      * @param _relationshipID The id of the relationship to return the remaining time.
      */
      function remainingTimeToDepositArbitrationFee(uint256 _relationshipID) external view returns (uint256) {
-        RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
+        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
 
-        if (escrowDetails.status != EscrowStatus.Reclaimed) {
-            revert InvalidStatus();
+        if (escrowDetails.status != NetworkInterface.EscrowStatus.Reclaimed) {
+            revert NetworkInterface.InvalidStatus();
         }
 
         return (block.timestamp - escrowDetails.reclaimedAt) > arbitrationFeeDepositPeriod ? 0 : (escrowDetails.reclaimedAt + arbitrationFeeDepositPeriod - block.timestamp);
@@ -680,11 +558,10 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
      * @param _relationshipID The ID of the relationship to initialize escrow details
      */
     function _initializeEscrowFundsAndTransfer(uint256 _relationshipID) internal {
-        Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
+        NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
  
-        relationshipIDToEscrowDetails[_relationshipID] = RelationshipEscrowDetails({
-            status: EscrowStatus.Initial,
-            valuePtr: relationship.wad,
+        relationshipIDToEscrowDetails[_relationshipID] = NetworkInterface.RelationshipEscrowDetails({
+            status: NetworkInterface.EscrowStatus.Initial,
             disputeID: _relationshipID,
             createdAt: block.timestamp,
             reclaimedAt: 0,
@@ -692,7 +569,7 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
             payeeFeeDeposit: 0
         });
 
-        IERC20(relationship.valuePtr).transferFrom(relationship.employer, address(this), relationship.wad);
+        _dai.transferFrom(relationship.employer, address(this), relationship.wad);
     }
 
     /**
@@ -700,10 +577,10 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
      * @param _relationshipID The ID of the relationship to surrender the funds.
      */
     function _surrenderFunds(uint256 _relationshipID) internal {
-        Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
-        RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
+        NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
+        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
         require(msg.sender == relationship.worker);
-        IERC20(relationship.valuePtr).transfer(relationship.employer,  relationship.wad);
+        _dai.transfer(relationship.employer,  relationship.wad);
     }
 
     /**
@@ -712,21 +589,21 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
      * @param _relationshipID The ID of the relationship to transfer funds
      */
     function _releaseFunds(uint256 _amount, uint256 _relationshipID) internal {
-        Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
-        RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
+        NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
+        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
             
         require(msg.sender == relationship.worker);
 
 
-        if (relationship.contractStatus != ContractStatus.Resolved) {
-            revert InvalidStatus();
+        if (relationship.contractStatus != NetworkInterface.ContractStatus.Resolved) {
+            revert NetworkInterface.InvalidStatus();
         }
 
-        escrowDetails.status = EscrowStatus.Resolved;
+        escrowDetails.status = NetworkInterface.EscrowStatus.Resolved;
 
         uint256 fee = _amount * OPPORTUNITY_WITHDRAWAL_FEE;
         uint256 payout = _amount - fee;
-        IERC20(relationship.valuePtr).transfer(relationship.worker, payout);
+        _dai.transfer(relationship.worker, payout);
         relationship.wad = 0;
     }
 
@@ -747,30 +624,16 @@ contract NetworkManager is IArbitrable, IEvidence, TokenExchange {
     function setMaxWaitlistSize(uint256 serviceId, uint256 newMaxWaitlistSize) public onlyOwnerOrDispatcherOfLensProfileId {}
 
     ///////////////////////////////////////////// Getters
-    function getUserCount() public view returns(uint) {
-        return userSummaries.length;
-    }
 
-
-    function getLocalPeerScore(address _observer, address _observed) public view {}
-
-    function getSummaryByLensId(uint256 profileId) external view returns(UserSummary memory) {
+    function getSummaryByLensId(uint256 profileId) external view returns(address) {
         return lensProfileIdToSummary[profileId];
     }
 
-    function getAddressByLensId(uint256 profileId) external view returns(address) {
-        return lensProfileIdToSummary[profileId].trueIdentification;
-    }
-
-    function getServices() public view returns(Services[]) {
+    function getServices() public view returns(NetworkInterface.Service[] memory) {
         return services;
     }
 
-    function getLensProfileId() external view returns(uint256) {
-        return lensProfileId;
-    }
-
-    function getRelationshipData(uint256 _relationshipID) external returns (Relationship memory) {
+    function getRelationshipData(uint256 _relationshipID) external returns (NetworkInterface.Relationship memory) {
         return relationshipIDToRelationship[_relationshipID];
     }
 }
