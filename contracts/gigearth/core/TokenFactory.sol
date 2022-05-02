@@ -152,7 +152,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
      * @param marketID The ID of the market
      * @param lister The address of the account which off-chain software shall see as lister of this token. Only emitted, not stored
      */
-    function addToken(string calldata tokenName, uint marketID, address lister) external virtual override onlyNetworkManager {
+    function addToken(string calldata tokenName, uint marketID, address lister) external virtual override onlyNetworkManager returns(uint) {
         MarketInfo storage marketInfo = _markets[marketID];
         require(marketInfo.marketDetails.exists, "market-not-exist");
         require(isValidTokenName(tokenName, marketID), "invalid-name");
@@ -178,6 +178,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
         });
 
         emit NewToken(tokenID, marketID, tokenName, address(serviceToken), lister);
+        return tokenID;
     }
 
     /**

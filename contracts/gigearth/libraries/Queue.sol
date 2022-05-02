@@ -278,5 +278,7 @@ library Queue {
         return uint256(_peekLast(queue._inner));
     }
 
-    function deleteWithId(Uint256Queue storage queue) internal view {}
+    function deleteWithId(Uint256Queue storage queue, uint256 id) internal view {}
+
+    function pop(Uint256Queue storage queue) internal {}
 }

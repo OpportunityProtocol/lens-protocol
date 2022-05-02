@@ -55,6 +55,7 @@ library NetworkInterface {
         uint256 referralShare;
         bool exist;
         uint256 id;
+        uint256 maxSize;
     }
 
     enum RulingOptions {

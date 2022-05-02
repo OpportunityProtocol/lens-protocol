@@ -56,6 +56,10 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
      */
     event OperationResult(address data);
 
+    /**
+     */
+    event ServicePurchased(uint256 indexed purchaseId, uint256 indexed serviceId, address indexed purchaser, address referral);
+
     IArbitrator immutable arbitrator;
     ILensHub immutable public lensHub;
 
@@ -131,63 +135,65 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
     ///////////////////////////////////////////// User
 
     /**
-     * Register as a worker
-     * @param vars LensProtocol profile data struct
-     * @return Returns The user's GigEarth id
+     * Registers an address as a worker on gig earth
+     * @param vars LensProtocol::DataTypes::CreateProfileData struct containing create profile data
      */
-    function registerWorker(DataTypes.CreateProfileData calldata vars) external returns(uint256) {
-        //check if the user is alredy registered
-        if (_isRegisteredUser(msg.sender)) {
+    function registerWorker(DataTypes.CreateProfileData calldata vars) external {
+        if (isRegisteredUser(msg.sender)) {
             revert();
         }   
 
         //create lens hub profile
         lensHub.createProfile(vars);
         uint256 lensProfileId = lensHub.getProfileIdByHandle(vars.handle);
-
-        lensProfileIdToSummary[lensProfileId] = msg.sender;
         addressToLensProfileId[msg.sender] = lensProfileId;
 
         emit UserRegistered(msg.sender);
     }
 
-    function submitReview(
-        uint256 _relationshipID, 
-        string calldata _reviewHash
-    ) external {}
-
-    function _isRegisteredUser(address userAddress) public view returns(bool) {
-        return universalAddressToSummaryAddress[userAddress] != address(0);
+    /**
+     * Returns the user's registration status
+     * @param userAddress The address to check
+     * @return True or false based on if the user is registered or not
+     */
+    function isRegisteredUser(address userAddress) public view returns(bool) {
+        return addressToLensProfileId[userAddress] != 0;
     }
 
     ///////////////////////////////////////////// Service Functions
 
+    /**
+     * Creates a service as well as deploys a new service token
+     * @param uint256 The market id the service belongs to
+     * @param string The ipfs hash for the metadata storage
+     * @param wad The cost of the service
+     * @param uint256 The payout for referral based purchases
+     * @param EIP712Signature EIP712Signature to confirm lens posting.
+     */
     function createService(
         uint256 marketId, 
         string calldata metadataPtr, 
         uint256 wad, 
+        uint256 initialMaxWaitlistSize,
         uint256 referralSharePayout,
         DataTypes.EIP712Signature calldata postSignature
     ) external {
-        //compute service id
-        uint256 serviceId = services.length;
+        uint256 serviceId = _tokenFactory.addToken(metadataPtr, marketId, msg.sender);
 
         //create service
-        NetworkInterface.Service memory newService = NetworkInterface.Service({
+        NetworkInterface.Service calldata newService = NetworkInterface.Service({
             marketId: marketId,
             owner: msg.sender,
             metadataPtr: metadataPtr,
             wad: wad,
             id: serviceId,
             exist: false,
-            referralShare: referralSharePayout
+            referralShare: referralSharePayout,
+            maxSize: initialMaxWaitlistSize
         });
 
-        services.push(newService);
-      //[serviceId].initialize();
-
-        bytes memory collectModuleInitData = abi.encode(serviceId);
-        bytes memory referenceModuleInitData = abi.encode(serviceId);
+        bytes memory collectModuleInitData = abi.encode(serviceId, newService);
+        bytes memory referenceModuleInitData = abi.encode(serviceId, newService);
 
         //create lens post
         DataTypes.PostWithSigData memory vars = DataTypes.PostWithSigData({
@@ -202,37 +208,23 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
 
         lensHub.postWithSig(vars);
 
-        uint256 pubId = lensHub.getProfile(addressToLensProfileId[msg.sender]).pubCount;
-
-        _registerService(pubId, newService);
-        _tokenFactory.addToken(metadataPtr, marketId, msg.sender);
-    }
-
-    function _registerService(uint256 lensPublicationId, NetworkInterface.Service memory newService) internal {
-        //add service
-        serviceIdToService[lensPublicationId] = newService;
-    }
-
-    function getWaitlistLength() public {
-        return serviceIdToWaitlist[serviceId].length();
+        services.push(newService);
+        serviceIdToWaitlist[serviceId].initialize();
+        serviceIdToService[serviceId] = newService;
     }
 
     /**
      * Purchases a service offering
      * @param serviceId The id of the service to purchase
-     *
-     * @notice There is no mechanism to withdraw funds once a service has been purchased. All interactions should
-     * be handled through gig earth incase of dispute.
-     * @notice emits an event with the service id
+     * @param referral The referrer of the contract
      */
     function purchaseServiceOffering(uint256 serviceId, address referral) public notServiceOwner {
-        uint256 currMaxWaitlistSize = serviceIdToMaxWaitlistSize[serviceId];
-        uint256 serviceWaitlistSize = getWaitlistLength();
+        NetworkInterface memory service = serviceIdToService[serviceId];
+        uint256 serviceWaitlistSize = getWaitlistLength(serviceId);
 
-        require(serviceWaitlistSize <= currMaxWaitlistSize, "max waitlist reached");
+        require(serviceWaitlistSize < service.maxSize, "max waitlist reached");
 
         _claimedServiceCounter++;
-        serviceIdToWaitlist[serviceId].enqueue(_claimedServiceCounter);
         purchasedServiceIdToMetdata[_claimedServiceCounter] = NetworkInterface.PurchasedServiceMetadata({
             exist: true,
             client: msg.sender,
@@ -240,21 +232,21 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
             referral: referral,
             purchaseId: _claimedServiceCounter
         });
-        
-        NetworkInterface.Service memory serviceDetails = serviceIdToService[serviceId];
-        _dai.approve(address(this), serviceDetails.wad);
-        require(_dai.transfer(address(this), serviceDetails.wad), "dai transfer");
 
-        //emit ServicePurchased(_claimedServiceCounter);
+        serviceIdToWaitlist[serviceId].enqueue(_claimedServiceCounter);
+        
+        _dai.approve(address(this), service.wad);
+        require(_dai.transfer(address(this), service.wad), "dai transfer");
+
+        emit ServicePurchased(_claimedServiceCounter, serviceId, msg.sender, referral);
     }
 
     /**
      * Resolves a service offering
      * @param serviceId The id of the service to resolve
-     *
-     * @notice penalty for canceling a service?
+     * @param purchaseId The purchase id of the service
      */ 
-    function resolveServiceOffering(uint256 serviceId, uint256 purchaseId) public onlyServiceClient {
+    function resolveServiceOffering(uint256 serviceId, uint256 purchaseId) public onlyServiceClient(serviceId) {
         NetworkInterface.PurchasedServiceMetadata memory metadata = purchasedServiceIdToMetdata[serviceId];
         NetworkInterface.Service memory service = serviceIdToService[serviceId];
         require(metadata.client == msg.sender, "only client");
@@ -620,5 +612,14 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
 
     function getRelationshipData(uint256 _relationshipID) external returns (NetworkInterface.Relationship memory) {
         return relationshipIDToRelationship[_relationshipID];
+    }
+
+    /**
+     * Returns the length of the waitlist for any service
+     * @param serviceId The id of the service
+     * @return Returns the length of the waitlist
+     */
+    function getWaitlistLength(uint256 serviceId) public returns(uint256) {
+        return serviceIdToWaitlist[serviceId].length();
     }
 }
