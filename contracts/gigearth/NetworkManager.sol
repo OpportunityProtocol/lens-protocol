@@ -37,16 +37,6 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
         string indexed marketName
     );
 
-     /**
-     * @dev To be emitted upon employer and worker entering contract.
-     */
-    event EnteredContract();
-
-    /**
-     * @dev To be emitted upon relationship status update
-     */
-    event ContractStatusUpdate();
-
     /**
      * @dev To be emitted upon relationship ownership update
      */
@@ -55,6 +45,16 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
     /**
      */
     event OperationResult(address data);
+
+    /**
+     *
+     */
+    event ContractCreated();
+
+    /**
+     *
+     */
+    event ServiceCreated();
 
     /**
      */
@@ -72,28 +72,26 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
     address LENS_FOLLOW_MODULE;
     address LENS_CONTENT_REFERENCE_MODULE;
     
-    mapping(address => address) private universalAddressToSummaryAddress;
-    mapping(uint256 => address) private lensProfileIdToSummary;
     mapping(address => uint256) public addressToLensProfileId;
 
     mapping(uint256 => uint256) public disputeIDtoRelationshipID;
     mapping(uint256 => NetworkInterface.RelationshipEscrowDetails) public relationshipIDToEscrowDetails;
-    mapping(address => bool) public universalAddressToAutomatedActions;
 
     NetworkInterface.Relationship[] public relationships;
     mapping(uint256 => NetworkInterface.Relationship) public relationshipIDToRelationship;
 
-    NetworkInterface.Service[] public services;
-    mapping(uint256 => NetworkInterface.Service) public serviceIdToService;
-    //mapping(uint256 => mapping(address => NetworkInterface.PurchasedServiceMetadata[])) public serviceIdToWaitlist; //waitlist for a given service id
-    mapping(uint256 => uint256) public serviceIdToWaitlistSize;
-    mapping(uint256 => uint256) public serviceIdToMaxWaitlistSize;
-
-    mapping(uint256 => uint256) public relationshipIDToMarketID;
-
-    mapping(uint256 => Queue.Uint256Queue) private serviceIdToWaitlist;
-    mapping(uint256 => NetworkInterface.PurchasedServiceMetadata) public purchasedServiceIdToMetdata;
     uint256 _claimedServiceCounter;
+    NetworkInterface.Service[] public services;
+    mapping(uint256 => uint256) public serviceIdToMaxWaitlistSize;
+    mapping(uint256 => Queue.Uint256Queue) private serviceIdToWaitlist;
+    mapping(uint256 => NetworkInterface.Service) public serviceIdToService;
+    mapping(uint256 => NetworkInterface.PurchasedServiceMetadata) public purchasedServiceIdToMetdata;
+
+    //TODO: Add global service/relationship identifier
+
+    modifier onlyContractEmployer() {
+        _;
+    }
 
     modifier notServiceOwner() {
         _;
@@ -211,6 +209,8 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
         services.push(newService);
         serviceIdToWaitlist[serviceId].initialize();
         serviceIdToService[serviceId] = newService;
+
+        emit ServiceCreated();
     }
 
     /**
@@ -258,12 +258,10 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
             uint256 referralShare = payout - service.referralShare;
             _dai.transfer(metadata.referral, service.referralShare);
             
-            //calculate gig earth fee
-            //TODO change network fee amount
+            //TODO change network fee
             networkFee = (payout * 1);
         } else {
-            //calculate gig earth fee
-            //TODO change network fee amount
+            //TODO change network fee
             networkFee = payout * 1;
         }
     
@@ -281,86 +279,86 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
 
     ///////////////////////////////////////////// Gig Functions
 
-    function createContract(
-        uint256 _marketID, 
-        string calldata _taskMetadataPtr
-    ) internal {
+    /**
+     * Creates a non service based contract
+     * @param marketId The id of the market the contract will be created in
+     * @param taskMetadataPtr The ipfs hash where the metadata of the contract is stored
+     */
+    function createContract(uint256 marketId, string calldata taskMetadataPtr) external onlyContractEmployer {
         NetworkInterface.Relationship memory relationshipData = NetworkInterface.Relationship({
                 employer: msg.sender,
                 worker: address(0),
-                taskMetadataPtr: _taskMetadataPtr,
-                contractStatus: NetworkInterface.ContractStatus
-                    .AwaitingWorker,
+                taskMetadataPtr: taskMetadataPtr,
                 contractOwnership: NetworkInterface.ContractOwnership
                     .Unclaimed,
-                contractPayoutType: NetworkInterface.ContractPayoutType.Flat,
                 wad: 0,
                 acceptanceTimestamp: 0,
                 resolutionTimestamp: 0,
                 satisfactoryScore: 0,
-                solutionMetadataPtr: ""
-            });
+                solutionMetadataPtr: "",
+                marketId: marketId
+        });
 
         relationships.push(relationshipData);
         relationshipIDToRelationship[relationships.length - 1] = relationshipData;
+
+        emit ContractCreated();
     }
 
-    function grantProposalRequest(uint256 _relationshipID, address _newWorker, uint256 _wad, string memory _extraData) external onlyWhenStatus(_relationshipID, NetworkInterface.ContractStatus.AwaitingWorker)   {
-        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
+    /**
+     * Accepts a proposal for the contract with relationshipId
+     * @param contractId The id of the contract
+     * @param newWorker The worker to assign the contract to
+     * @param wad The agreed upon payout for the contract
+     * @notice Calling this function will initialize the escrow funds
+     */
+    function grantProposalRequest(uint256 contractId, address newWorker, uint256 wad) external onlyWhenOwnership(_relationshipID, NetworkInterface.ContractOwnership.Unclaimed) onlyContractEmployer {
+        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[contractId];
 
         require(msg.sender == relationship.employer, "Only the employer of this relationship can grant the proposal.");
-        require(_newWorker != address(0), "You must grant this proposal to a valid worker.");
+        require(newWorker != address(0), "You must grant this proposal to a valid worker.");
         require(relationship.worker == address(0), "This job is already being worked.");
-        require(_wad != uint256(0),"The payout amount must be greater than 0.");
-        require(relationship.contractOwnership == NetworkInterface.ContractOwnership.Unclaimed,"This relationship must not already be claimed.");
+        require(wad != uint256(0),"The payout amount must be greater than 0.");
 
-        relationship.wad = _wad;
-        relationship.worker = _newWorker;
+        relationship.wad = wad;
+        relationship.worker = newWorker;
         relationship.acceptanceTimestamp = block.timestamp;
-        relationship.contractOwnership = NetworkInterface.ContractOwnership.Pending;
+        relationship.contractOwnership = NetworkInterface.ContractOwnership.Claimed;
 
-        emit ContractStatusUpdate();
+        _initializeEscrowFundsAndTransfer(contractId);
+
         emit ContractOwnershipUpdate();
     }
 
-        function resolveContract(uint256 _relationshipID, string calldata _solutionMetadataPtr, uint256 _satisfactoryScore) external   {
-        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
+    /**
+     * Resolves the contract and transfers escrow funds to the specified worker of the contract
+     * @param contractId The id of the contract
+     * @param solutionMetadataPtr The ipfs hash storing the solution metadata
+     * @param satisfactoryScore The solution satisfactory score
+     */
+    function resolveContract(uint256 contractId, string calldata solutionMetadataPtr, uint256 satisfactoryScore) external onlyWhenOwnership(_relationshipID, NetworkInterface.ContractOwnership.Claimed) onlyContractEmployer {
+        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[contractId];
 
         require(msg.sender == relationship.employer);
         require(relationship.worker != address(0));
         require(relationship.wad != uint256(0));
-        require(relationship.contractStatus == NetworkInterface.ContractStatus.AwaitingResolution);
 
         bytes memory testEmptyString = bytes(relationship.solutionMetadataPtr);
         require(testEmptyString.length != 0, "Empty solution metadata pointer.");
 
-        if (relationship.contractPayoutType == NetworkInterface.ContractPayoutType.Flat) {
-            _resolveContractAndRewardWorker(_relationshipID);
-        }
-
+        _releaseContractFunds(relationship.wad, contractId);
         relationship.satisfactoryScore = _satisfactoryScore;
-        emit ContractStatusUpdate();
+
+        emit ContractOwnershipUpdate();
     }
 
-    /**
-     * @notice Sets the contract status to resolved and releases the funds to the appropriate user.
-     */
-    function _resolveContractAndRewardWorker(uint256 _relationshipID) internal {
-        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
-         
-        _releaseFunds(relationship.wad, _relationshipID);
-        relationship.contractStatus = NetworkInterface.ContractStatus.Resolved;
-    }
-    
-
-    function releaseJob(uint256 _relationshipID) external onlyWhenStatus(_relationshipID, NetworkInterface.ContractStatus.AwaitingWorker)  {
+    function releaseJob(uint256 _relationshipID) external onlyWhenOwnership(_relationshipID, NetworkInterface.ContractOwnership.Claimed) onlyContractWorker(_relationshipId)  {
         NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
         require(relationship.contractOwnership == NetworkInterface.ContractOwnership.Claimed);
 
         _surrenderFunds(_relationshipID);
         resetRelationshipState(relationship);
 
-        emit ContractStatusUpdate();
         emit ContractOwnershipUpdate();
     }
 
@@ -565,16 +563,11 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
      * @param _amount The amount to release to the worker
      * @param _relationshipID The ID of the relationship to transfer funds
      */
-    function _releaseFunds(uint256 _amount, uint256 _relationshipID) internal {
+    function _releaseContractFunds(uint256 _amount, uint256 _relationshipID) internal {
         NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[_relationshipID];
         NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[_relationshipID];
             
-        require(msg.sender == relationship.worker);
-
-
-        if (relationship.contractStatus != NetworkInterface.ContractStatus.Resolved) {
-            revert NetworkInterface.InvalidStatus();
-        }
+        require(msg.sender == relationship.employer, "only employer");
 
         escrowDetails.status = NetworkInterface.EscrowStatus.Resolved;
 

@@ -13,9 +13,7 @@ library NetworkInterface {
         address employer;
         address worker;
         string taskMetadataPtr;
-        ContractStatus contractStatus;
         ContractOwnership contractOwnership;
-        ContractPayoutType contractPayoutType;
         uint256 wad;
         uint256 acceptanceTimestamp;
         uint256 resolutionTimestamp;
