@@ -10,8 +10,6 @@ library NetworkInterface {
     error InvalidRuling(uint256 _ruling, uint256 _numberOfChoices);
 
     struct Relationship {
-        uint256 id;
-        uint256 marketPtr;
         address employer;
         address worker;
         string taskMetadataPtr;
@@ -42,7 +40,6 @@ library NetworkInterface {
 
     struct RelationshipEscrowDetails {
         EscrowStatus status;
-        uint256 valuePtr;
         uint256 disputeID;
         uint256 createdAt;
         uint256 reclaimedAt;
@@ -104,7 +101,7 @@ library NetworkInterface {
     }
 
     struct PurchasedServiceMetadata {
-        uint256 serviceId;
+        uint256 purchaseId;
         address client;
         bool exist;
         uint256 timestampPurchased;

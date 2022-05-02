@@ -7,7 +7,7 @@ import "../interfaces/ILensHub.sol";
 import "../libraries/DataTypes.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
+import "./libraries/Queue.sol";
 import "./libraries/NetworkInterface.sol";
 import "./interface/ITokenFactory.sol";
 import "./core/TokenExchange.sol";
@@ -18,7 +18,7 @@ interface IContentReferenceModule {
 }
 
 contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExchange {
-    //using Queue for Queue.AddressQueue;
+    using Queue for Queue.Uint256Queue;
 
     /**
      */
@@ -81,13 +81,13 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
 
     NetworkInterface.Service[] public services;
     mapping(uint256 => NetworkInterface.Service) public serviceIdToService;
-   // mapping(uint256 => mapping(address => NetworkInterface.PurchasedServiceMetadata[])) public serviceIdToWaitlist; //waitlist for a given service id
+    //mapping(uint256 => mapping(address => NetworkInterface.PurchasedServiceMetadata[])) public serviceIdToWaitlist; //waitlist for a given service id
     mapping(uint256 => uint256) public serviceIdToWaitlistSize;
     mapping(uint256 => uint256) public serviceIdToMaxWaitlistSize;
 
     mapping(uint256 => uint256) public relationshipIDToMarketID;
 
-  //  mapping(uint256 => Queue.Uint256Queue) public serviceIdToWaitlist;
+    mapping(uint256 => Queue.Uint256Queue) private serviceIdToWaitlist;
     mapping(uint256 => NetworkInterface.PurchasedServiceMetadata) public purchasedServiceIdToMetdata;
     uint256 _claimedServiceCounter;
 
@@ -211,7 +211,10 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
     function _registerService(uint256 lensPublicationId, NetworkInterface.Service memory newService) internal {
         //add service
         serviceIdToService[lensPublicationId] = newService;
-      //  serviceIdToWaitlist[lensPublicationId] = [];
+    }
+
+    function getWaitlistLength() public {
+        return serviceIdToWaitlist[serviceId].length();
     }
 
     /**
@@ -220,15 +223,16 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
      *
      * @notice There is no mechanism to withdraw funds once a service has been purchased. All interactions should
      * be handled through gig earth incase of dispute.
+     * @notice emits an event with the service id
      */
     function purchaseServiceOffering(uint256 serviceId, address referral) public notServiceOwner {
         uint256 currMaxWaitlistSize = serviceIdToMaxWaitlistSize[serviceId];
-        uint256 serviceWaitlistSize = 0; //serviceIdToWaitlist.length();
+        uint256 serviceWaitlistSize = getWaitlistLength();
 
         require(serviceWaitlistSize <= currMaxWaitlistSize, "max waitlist reached");
 
         _claimedServiceCounter++;
-       /* serviceIdToWaitlist[serviceId].enqueue(_claimedServiceCounter); */
+        serviceIdToWaitlist[serviceId].enqueue(_claimedServiceCounter);
         purchasedServiceIdToMetdata[_claimedServiceCounter] = NetworkInterface.PurchasedServiceMetadata({
             exist: true,
             client: msg.sender,
@@ -240,6 +244,8 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
         NetworkInterface.Service memory serviceDetails = serviceIdToService[serviceId];
         _dai.approve(address(this), serviceDetails.wad);
         require(_dai.transfer(address(this), serviceDetails.wad), "dai transfer");
+
+        //emit ServicePurchased(_claimedServiceCounter);
     }
 
     /**
@@ -262,11 +268,11 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
             
             //calculate gig earth fee
             //TODO change network fee amount
-            networkFee = ((payout - service.referralShare) * .01);
+            networkFee = (payout * 1);
         } else {
             //calculate gig earth fee
             //TODO change network fee amount
-            networkFee = payout * .01;
+            networkFee = payout * 1;
         }
     
         uint256 ownerPayout = payout - networkFee;
@@ -274,11 +280,11 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
         _dai.transfer(treasury, networkFee); //transfer dai to gig earth treasruy
 
         //remove from waitlist
-     /*   if (serviceIdToWaitlist[serviceId].peekAtLast() == purchaseId) {
+        if (serviceIdToWaitlist[serviceId].peekLast() == purchaseId) {
             serviceIdToWaitlist[serviceId].pop();
         } else {
             serviceIdToWaitlist[serviceId].deleteWithId(purchaseId);
-        }*/
+        }
     }
 
     ///////////////////////////////////////////// Gig Functions
@@ -288,7 +294,6 @@ contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExc
         string calldata _taskMetadataPtr
     ) internal {
         NetworkInterface.Relationship memory relationshipData = NetworkInterface.Relationship({
-                marketPtr: _marketID,
                 employer: msg.sender,
                 worker: address(0),
                 taskMetadataPtr: _taskMetadataPtr,
