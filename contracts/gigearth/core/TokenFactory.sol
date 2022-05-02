@@ -53,7 +53,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
 
     mapping (string => MarketInfo) _marketInfo;
 
-    INetworkManager _networkManager;
+ //   INetworkManager _networkManager;
 
     event NewMarket(uint id,
                     string name,
@@ -85,7 +85,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
         setOwnerInternal(owner); // Checks owner to be non-zero
         _tokenExchange = tokenExchange;
         _tokenLogic = tokenLogic;
-        networkManager = INetworkManager(networkManager);
+      //  networkManager = INetworkManager(networkManager);
     }
 
     /**

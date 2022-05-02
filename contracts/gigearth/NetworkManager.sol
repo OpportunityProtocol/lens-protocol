@@ -11,14 +11,14 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./libraries/NetworkInterface.sol";
 import "./interface/ITokenFactory.sol";
 import "./core/TokenExchange.sol";
-import "./interface/INetworkManager.sol";
+//import "./interface/INetworkManager.sol";
 
 interface IContentReferenceModule {
     function getPubIdByRelationship(uint256 _id) external view returns(uint256);
 }
 
-contract NetworkManager is INetworkManager, IArbitrable, IEvidence, TokenExchange {
-    using Queue for Queue.AddressQueue;
+contract NetworkManager is /*INetworkManager,*/ IArbitrable, IEvidence, TokenExchange {
+    //using Queue for Queue.AddressQueue;
 
     /**
      */
@@ -81,14 +81,15 @@ contract NetworkManager is INetworkManager, IArbitrable, IEvidence, TokenExchang
 
     NetworkInterface.Service[] public services;
     mapping(uint256 => NetworkInterface.Service) public serviceIdToService;
-    mapping(uint256 => mapping(address => NetworkInterface.ClaimedServiceMetadata[])) public serviceIdToWaitlist; //waitlist for a given service id
+   // mapping(uint256 => mapping(address => NetworkInterface.PurchasedServiceMetadata[])) public serviceIdToWaitlist; //waitlist for a given service id
     mapping(uint256 => uint256) public serviceIdToWaitlistSize;
     mapping(uint256 => uint256) public serviceIdToMaxWaitlistSize;
 
     mapping(uint256 => uint256) public relationshipIDToMarketID;
 
-    mapping(uint256 => Queue.ClaimedService) public serviceIdToWaitlist;
-
+  //  mapping(uint256 => Queue.Uint256Queue) public serviceIdToWaitlist;
+    mapping(uint256 => NetworkInterface.PurchasedServiceMetadata) public purchasedServiceIdToMetdata;
+    uint256 _claimedServiceCounter;
 
     modifier notServiceOwner() {
         _;
@@ -165,9 +166,8 @@ contract NetworkManager is INetworkManager, IArbitrable, IEvidence, TokenExchang
         uint256 marketId, 
         string calldata metadataPtr, 
         uint256 wad, 
-        uint256 initialWaitlistSize,
         uint256 referralSharePayout,
-        DataTypes.EIP712Signature postSignature
+        DataTypes.EIP712Signature calldata postSignature
     ) external {
         //compute service id
         uint256 serviceId = services.length;
@@ -178,14 +178,13 @@ contract NetworkManager is INetworkManager, IArbitrable, IEvidence, TokenExchang
             owner: msg.sender,
             metadataPtr: metadataPtr,
             wad: wad,
-            MAX_WAITLIST_SIZE: initialWaitlistSize,
             id: serviceId,
             exist: false,
             referralShare: referralSharePayout
         });
 
         services.push(newService);
-        serviceIdToWaitlist[serviceId].initialize();
+      //[serviceId].initialize();
 
         bytes memory collectModuleInitData = abi.encode(serviceId);
         bytes memory referenceModuleInitData = abi.encode(serviceId);
@@ -205,15 +204,14 @@ contract NetworkManager is INetworkManager, IArbitrable, IEvidence, TokenExchang
 
         uint256 pubId = lensHub.getProfile(addressToLensProfileId[msg.sender]).pubCount;
 
-        _registerService(pubId, newService, initialWaitlistSize);
+        _registerService(pubId, newService);
         _tokenFactory.addToken(metadataPtr, marketId, msg.sender);
     }
 
-    function _registerService(uint256 lensPublicationId, NetworkInterface.Service memory newService, uint256 initialWaitlistSize) internal {
+    function _registerService(uint256 lensPublicationId, NetworkInterface.Service memory newService) internal {
         //add service
         serviceIdToService[lensPublicationId] = newService;
       //  serviceIdToWaitlist[lensPublicationId] = [];
-        serviceIdToMaxWaitlistSize[lensPublicationId] = initialWaitlistSize;
     }
 
     /**
@@ -225,19 +223,20 @@ contract NetworkManager is INetworkManager, IArbitrable, IEvidence, TokenExchang
      */
     function purchaseServiceOffering(uint256 serviceId, address referral) public notServiceOwner {
         uint256 currMaxWaitlistSize = serviceIdToMaxWaitlistSize[serviceId];
-        uint256 serviceWaitlistSize = serviceIdToWaitlistSize[serviceId];
+        uint256 serviceWaitlistSize = 0; //serviceIdToWaitlist.length();
 
         require(serviceWaitlistSize <= currMaxWaitlistSize, "max waitlist reached");
-        
-        serviceIdToWaitlist[serviceId].enqueue(NetworkInterface.ClaimedServiceMetadata({
+
+        _claimedServiceCounter++;
+       /* serviceIdToWaitlist[serviceId].enqueue(_claimedServiceCounter); */
+        purchasedServiceIdToMetdata[_claimedServiceCounter] = NetworkInterface.PurchasedServiceMetadata({
             exist: true,
             client: msg.sender,
             timestampPurchased: block.timestamp,
             referral: referral,
-            purchaseId: serviceIdToWaitlist[serviceId].length()
-        }));
-
-    //add at() and assign() to dequeue
+            purchaseId: _claimedServiceCounter
+        });
+        
         NetworkInterface.Service memory serviceDetails = serviceIdToService[serviceId];
         _dai.approve(address(this), serviceDetails.wad);
         require(_dai.transfer(address(this), serviceDetails.wad), "dai transfer");
@@ -246,21 +245,24 @@ contract NetworkManager is INetworkManager, IArbitrable, IEvidence, TokenExchang
     /**
      * Resolves a service offering
      * @param serviceId The id of the service to resolve
+     *
+     * @notice penalty for canceling a service?
      */ 
     function resolveServiceOffering(uint256 serviceId, uint256 purchaseId) public onlyServiceClient {
-        NetworkInterface.ClaimedServiceMetadata memory metadata = serviceIdToWaitlist[serviceId];
-        require(metadata.client == msg.sender);
-        require(metadata.exist == true)
+        NetworkInterface.PurchasedServiceMetadata memory metadata = purchasedServiceIdToMetdata[serviceId];
+        NetworkInterface.Service memory service = serviceIdToService[serviceId];
+        require(metadata.client == msg.sender, "only client");
+        require(metadata.exist == true, "service doesn't exist");
 
         uint256 networkFee;
-        uint256 payout = serviceIdToService[serviceId].wad;
-        if (serviceIdToWaitlist[serviceId][serviceId].referral != address(0)) {
-            uint256 referralShare = payout - serviceIdToWaitlist[serviceId][serviceId].referralShare;
-            _dai.transfer(serviceIdToWaitlist[serviceId][serviceId].referral, referralShare);
+        uint256 payout = service.wad;
+        if (metadata.referral != address(0)) {
+            uint256 referralShare = payout - service.referralShare;
+            _dai.transfer(metadata.referral, service.referralShare);
             
             //calculate gig earth fee
             //TODO change network fee amount
-            networkFee = ((payout - referralShare) * .01);
+            networkFee = ((payout - service.referralShare) * .01);
         } else {
             //calculate gig earth fee
             //TODO change network fee amount
@@ -268,14 +270,16 @@ contract NetworkManager is INetworkManager, IArbitrable, IEvidence, TokenExchang
         }
     
         uint256 ownerPayout = payout - networkFee;
-        _dai.transfer(serviceIdToService[serviceId].owner, ownerPayout); //transfer dai from escrow to client
+        _dai.transfer(service.owner, ownerPayout); //transfer dai from escrow to client
         _dai.transfer(treasury, networkFee); //transfer dai to gig earth treasruy
 
         //remove from waitlist
-        delete serviceIdToWaitlist[serviceId][serviceId]; //leaves a gap at index [serviceId]
+     /*   if (serviceIdToWaitlist[serviceId].peekAtLast() == purchaseId) {
+            serviceIdToWaitlist[serviceId].pop();
+        } else {
+            serviceIdToWaitlist[serviceId].deleteWithId(purchaseId);
+        }*/
     }
-
-    function cancelService() {}
 
     ///////////////////////////////////////////// Gig Functions
 
@@ -322,22 +326,35 @@ contract NetworkManager is INetworkManager, IArbitrable, IEvidence, TokenExchang
         emit ContractOwnershipUpdate();
     }
 
-    function work(uint256 _relationshipID, string memory _extraData) external onlyWhenStatus(_relationshipID, NetworkInterface.ContractStatus.AwaitingWorker) {
+        function resolveContract(uint256 _relationshipID, string calldata _solutionMetadataPtr, uint256 _satisfactoryScore) external   {
         NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
 
-        require(msg.sender == relationship.worker);
-        require(relationship.contractOwnership == NetworkInterface.ContractOwnership.Pending);
+        require(msg.sender == relationship.employer);
+        require(relationship.worker != address(0));
+        require(relationship.wad != uint256(0));
+        require(relationship.contractStatus == NetworkInterface.ContractStatus.AwaitingResolution);
 
-        _initializeEscrowFundsAndTransfer(_relationshipID);
+        bytes memory testEmptyString = bytes(relationship.solutionMetadataPtr);
+        require(testEmptyString.length != 0, "Empty solution metadata pointer.");
 
-        relationship.contractOwnership = NetworkInterface.ContractOwnership.Claimed;
-        relationship.contractStatus = NetworkInterface.ContractStatus.AwaitingResolution;
-        relationship.acceptanceTimestamp = block.timestamp;
+        if (relationship.contractPayoutType == NetworkInterface.ContractPayoutType.Flat) {
+            _resolveContractAndRewardWorker(_relationshipID);
+        }
 
-        emit EnteredContract();
+        relationship.satisfactoryScore = _satisfactoryScore;
         emit ContractStatusUpdate();
-        emit ContractOwnershipUpdate();
     }
+
+    /**
+     * @notice Sets the contract status to resolved and releases the funds to the appropriate user.
+     */
+    function _resolveContractAndRewardWorker(uint256 _relationshipID) internal {
+        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
+         
+        _releaseFunds(relationship.wad, _relationshipID);
+        relationship.contractStatus = NetworkInterface.ContractStatus.Resolved;
+    }
+    
 
     function releaseJob(uint256 _relationshipID) external onlyWhenStatus(_relationshipID, NetworkInterface.ContractStatus.AwaitingWorker)  {
         NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
@@ -365,43 +382,6 @@ contract NetworkManager is INetworkManager, IArbitrable, IEvidence, TokenExchang
         require(relationship.contractOwnership == NetworkInterface.ContractOwnership.Unclaimed);
 
         relationship.taskMetadataPtr = _newTaskPointerHash;
-    }
-    
-    /* The final solution hash - can be called as long as resolveTraditional hasn't been called  */
-    function submitWork(uint256 _relationshipID, string calldata _solutionMetadataPtr) onlyWhenStatus(_relationshipID, NetworkInterface.ContractStatus.AwaitingWorker) external {
-        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
-        require(msg.sender == relationship.worker, "Only the worker can call this function.");
-
-        relationship.solutionMetadataPtr = _solutionMetadataPtr;
-    }
-
-    function resolveTraditional(uint256 _relationshipID, uint256 _satisfactoryScore) external   {
-        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
-
-        require(msg.sender == relationship.employer);
-        require(relationship.worker != address(0));
-        require(relationship.wad != uint256(0));
-        require(relationship.contractStatus == NetworkInterface.ContractStatus.AwaitingResolution);
-
-        bytes memory testEmptyString = bytes(relationship.solutionMetadataPtr);
-        require(testEmptyString.length != 0, "Empty solution metadata pointer.");
-
-        if (relationship.contractPayoutType == NetworkInterface.ContractPayoutType.Flat) {
-            _resolveContractAndRewardWorker(_relationshipID);
-        }
-
-        relationship.satisfactoryScore = _satisfactoryScore;
-        emit ContractStatusUpdate();
-    }
-
-    /**
-     * @notice Sets the contract status to resolved and releases the funds to the appropriate user.
-     */
-    function _resolveContractAndRewardWorker(uint256 _relationshipID) internal {
-        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[_relationshipID];
-         
-        _releaseFunds(relationship.wad, _relationshipID);
-        relationship.contractStatus = NetworkInterface.ContractStatus.Resolved;
     }
 
     ///////////////////////////////////////////// Kleros

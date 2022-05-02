@@ -55,7 +55,6 @@ library NetworkInterface {
         address owner;
         string metadataPtr;
         uint256 wad;
-        uint256 MAX_WAITLIST_SIZE;
         uint256 referralShare;
         bool exist;
         uint256 id;
@@ -104,9 +103,10 @@ library NetworkInterface {
         Milestone
     }
 
-    struct ClaimedServiceMetadata {
+    struct PurchasedServiceMetadata {
         uint256 serviceId;
         address client;
+        bool exist;
         uint256 timestampPurchased;
         address referral;
     }
