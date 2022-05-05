@@ -16,7 +16,7 @@ import "../interface/INetworkManager.sol";
  * @title ITokenFactory (Originally: IdeaTokenFactory)
  * @author Alexander Schlindwein
  *
- * Manages the creation of markets and IdeaTokens
+ * Manages the creation of markets and ServiceTokens
  * Sits behind an AdminUpgradabilityProxy
  */
 contract TokenFactory is ITokenFactory, Initializable, Ownable {

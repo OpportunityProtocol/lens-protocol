@@ -14,7 +14,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 /**
- * @title ITokenExchange (Originally: IdeaTokenExchange)
+ * @title TokenExchange (Originally: IdeaTokenExchange)
  * @author Alexander Schlindwein
  *
  * Exchanges Dai <-> ServiceTokens using a bonding curve. Sits behind a proxy

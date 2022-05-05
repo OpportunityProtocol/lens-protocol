@@ -74,6 +74,17 @@ library Queue {
     }
 
     /**
+     * @dev Removes an element from the front of the queue based on an id and returns it. O(1)
+     * @param queue QueueStorage struct from contract.
+     */
+    function _dequeueById(QueueStorage storage queue, uint256 id) private isNotEmpty(queue) returns (bytes32 data) {
+        data = queue._data[id];
+        queue._first++;
+        delete queue._data[id];
+    }
+
+
+    /**
      * @dev Returns the data from the front of the queue, without removing it. O(1)
      * @param queue QueueStorage struct from contract.
      */
@@ -87,132 +98,6 @@ library Queue {
      */
     function _peekLast(QueueStorage storage queue) private view isNotEmpty(queue) returns (bytes32 data) {
         return queue._data[queue._last];
-    }
-
-    // Bytes32Queue
-
-    struct Bytes32Queue {
-        QueueStorage _inner;
-    }
-
-    /**
-     * @dev Sets the queue's initial state, with a queue size of 0.
-     * @param queue Bytes32Queue struct from contract.
-     */
-    function initialize(Bytes32Queue storage queue) internal {
-        _initialize(queue._inner);
-    }
-
-    /**
-     * @dev Gets the number of elements in the queue. O(1)
-     * @param queue Bytes32Queue struct from contract.
-     */
-    function length(Bytes32Queue storage queue) internal view returns (uint256) {
-        return _length(queue._inner);
-    }
-
-    /**
-     * @dev Returns if queue is empty. O(1)
-     * @param queue Bytes32Queue struct from contract.
-     */
-    function isEmpty(Bytes32Queue storage queue) internal view returns (bool) {
-        return _isEmpty(queue._inner);
-    }
-
-    /**
-     * @dev Adds an element to the back of the queue. O(1)
-     * @param queue Bytes32Queue struct from contract.
-     * @param data The added element's data.
-     */
-    function enqueue(Bytes32Queue storage queue, bytes32 data) internal {
-        _enqueue(queue._inner, data);
-    }
-
-    /**
-     * @dev Removes an element from the front of the queue and returns it. O(1)
-     * @param queue Bytes32Queue struct from contract.
-     */
-    function dequeue(Bytes32Queue storage queue) internal returns (bytes32 data) {
-        return _dequeue(queue._inner);
-    }
-
-    /**
-     * @dev Returns the data from the front of the queue, without removing it. O(1)
-     * @param queue Bytes32Queue struct from contract.
-     */
-    function peek(Bytes32Queue storage queue) internal view returns (bytes32 data) {
-        return _peek(queue._inner);
-    }
-
-    /**
-     * @dev Returns the data from the back of the queue. O(1)
-     * @param queue Bytes32Queue struct from contract.
-     */
-    function peekLast(Bytes32Queue storage queue) internal view returns (bytes32 data) {
-        return _peekLast(queue._inner);
-    }
-
-    // AddressQueue
-
-    struct AddressQueue {
-        QueueStorage _inner;
-    }
-
-    /**
-     * @dev Sets the queue's initial state, with a queue size of 0.
-     * @param queue AddressQueue struct from contract.
-     */
-    function initialize(AddressQueue storage queue) internal {
-        _initialize(queue._inner);
-    }
-
-    /**
-     * @dev Gets the number of elements in the queue. O(1)
-     * @param queue AddressQueue struct from contract.
-     */
-    function length(AddressQueue storage queue) internal view returns (uint256) {
-        return _length(queue._inner);
-    }
-
-    /**
-     * @dev Returns if queue is empty. O(1)
-     * @param queue AddressQueue struct from contract.
-     */
-    function isEmpty(AddressQueue storage queue) internal view returns (bool) {
-        return _isEmpty(queue._inner);
-    }
-
-    /**
-     * @dev Adds an element to the back of the queue. O(1)
-     * @param queue AddressQueue struct from contract.
-     * @param data The added element's data.
-     */
-    function enqueue(AddressQueue storage queue, address data) internal {
-        _enqueue(queue._inner, bytes32(uint256(uint160(data))));
-    }
-
-    /**
-     * @dev Removes an element from the front of the queue and returns it. O(1)
-     * @param queue AddressQueue struct from contract.
-     */
-    function dequeue(AddressQueue storage queue) internal returns (address data) {
-        return address(uint160(uint256(_dequeue(queue._inner))));
-    }
-
-    /**
-     * @dev Returns the data from the front of the queue, without removing it. O(1)
-     * @param queue AddressQueue struct from contract.
-     */
-    function peek(AddressQueue storage queue) internal view returns (address data) {
-        return address(uint160(uint256(_peek(queue._inner))));
-    }
-
-    /**
-     * @dev Returns the data from the back of the queue. O(1)
-     * @param queue AddressQueue struct from contract.
-     */
-    function peekLast(AddressQueue storage queue) internal view returns (address data) {
-        return address(uint160(uint256(_peekLast(queue._inner))));
     }
 
     // Uint256Queue
@@ -278,7 +163,7 @@ library Queue {
         return uint256(_peekLast(queue._inner));
     }
 
-    function deleteWithId(Uint256Queue storage queue, uint256 id) internal view {}
-
-    function pop(Uint256Queue storage queue) internal {}
+    function dequeueById(Uint256Queue storage queue, uint256 id) internal returns(uint256 data) {
+        return uint256(_dequeueById(queue._inner, id));
+    }
 }

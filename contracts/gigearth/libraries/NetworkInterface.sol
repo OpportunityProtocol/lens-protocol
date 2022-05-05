@@ -19,6 +19,7 @@ library NetworkInterface {
         uint256 resolutionTimestamp;
         uint256 satisfactoryScore;
         string solutionMetadataPtr;
+        uint256 marketId;
     }
 
     struct Market {
@@ -79,7 +80,10 @@ library NetworkInterface {
     enum ContractOwnership {
         Unclaimed,
         Pending,
-        Claimed
+        Claimed,
+        Disputed,
+        Resolved,
+        Reclaimed
     }
 
     /**
