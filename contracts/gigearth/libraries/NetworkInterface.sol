@@ -10,20 +10,16 @@ library NetworkInterface {
     error InvalidRuling(uint256 _ruling, uint256 _numberOfChoices);
 
     struct Relationship {
-        address valuePtr;
-        uint256 id;
-        uint256 marketPtr;
         address employer;
         address worker;
         string taskMetadataPtr;
-        ContractStatus contractStatus;
         ContractOwnership contractOwnership;
-        ContractPayoutType contractPayoutType;
         uint256 wad;
         uint256 acceptanceTimestamp;
         uint256 resolutionTimestamp;
         uint256 satisfactoryScore;
         string solutionMetadataPtr;
+        uint256 marketId;
     }
 
     struct Market {
@@ -43,7 +39,6 @@ library NetworkInterface {
 
     struct RelationshipEscrowDetails {
         EscrowStatus status;
-        uint256 valuePtr;
         uint256 disputeID;
         uint256 createdAt;
         uint256 reclaimedAt;
@@ -56,10 +51,10 @@ library NetworkInterface {
         address owner;
         string metadataPtr;
         uint256 wad;
-        uint256 MAX_WAITLIST_SIZE;
         uint256 referralShare;
         bool exist;
         uint256 id;
+        uint256 maxSize;
     }
 
     enum RulingOptions {
@@ -85,7 +80,10 @@ library NetworkInterface {
     enum ContractOwnership {
         Unclaimed,
         Pending,
-        Claimed
+        Claimed,
+        Disputed,
+        Resolved,
+        Reclaimed
     }
 
     /**
@@ -105,9 +103,10 @@ library NetworkInterface {
         Milestone
     }
 
-    struct ClaimedServiceMetadata {
-        uint256 serviceId;
+    struct PurchasedServiceMetadata {
+        uint256 purchaseId;
         address client;
+        bool exist;
         uint256 timestampPurchased;
         address referral;
     }

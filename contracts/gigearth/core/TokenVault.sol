@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.6.9;
+pragma solidity ^0.8.7;
 pragma experimental ABIEncoderV2;
 
 import "../interface/ITokenVault.sol";
@@ -81,7 +81,7 @@ contract TokenVault is ITokenVault, Initializable {
         require(IERC20(serviceToken).allowance(msg.sender, address(this)) >= amount, "insufficient-allowance");
         require(IERC20(serviceToken).transferFrom(msg.sender, address(this), amount), "transfer-failed");
 
-        uint lockedUntil = duration.add(now);
+        uint lockedUntil = duration.add(block.timestamp);
         bytes32 location = getLLEntryStorageLocation(serviceToken, recipient, lockedUntil);
 
         LLEntry storage entry = getLLEntry(location);
@@ -116,7 +116,7 @@ contract TokenVault is ITokenVault, Initializable {
      */
     function withdraw(address serviceToken, uint[] calldata untils, address recipient) external override {
 
-        uint ts = now;
+        uint ts = block.timestamp;
         uint total = 0;
 
         for(uint i = 0; i < untils.length; i++) {
@@ -209,7 +209,7 @@ contract TokenVault is ITokenVault, Initializable {
 
     function getLLEntry(bytes32 location) internal pure returns (LLEntry storage) {
         LLEntry storage entry;
-        assembly { entry_slot := location }
+        assembly { entry.slot := location }
         return entry;
     } 
 }

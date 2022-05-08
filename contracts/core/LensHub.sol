@@ -148,18 +148,6 @@ contract LensHub is LensNFTBase, VersionedInitializable, LensMultiState, LensHub
         whenNotPaused
         returns (uint256)
     {
-<<<<<<< HEAD
-        uint256 profileId = ++_profileCounter;
-        console.log(profileId);
-        _mint(vars.to, profileId);
-        PublishingLogic.createProfile(
-            vars,
-            profileId,
-            _profileIdByHandleHash,
-            _profileById,
-            _followModuleWhitelisted
-        );
-=======
         if (!_profileCreatorWhitelisted[msg.sender]) revert Errors.ProfileCreatorNotWhitelisted();
         unchecked {
             uint256 profileId = ++_profileCounter;
@@ -173,7 +161,6 @@ contract LensHub is LensNFTBase, VersionedInitializable, LensMultiState, LensHub
             );
             return profileId;
         }
->>>>>>> 0469d205916280674544e9ad24b6c1a4ae2228b2
     }
 
     /// @inheritdoc ILensHub

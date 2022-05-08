@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.6.9;
+pragma solidity ^0.8.7;
 pragma experimental ABIEncoderV2;
 
 import "../interface/IWETH.sol";
 import "../interface/IUniswapV2Factory.sol";
 import "../interface/IUniswapV2Router02.sol";
-import "./interface/ITokenExchange.sol";
-import "./interface/ITokenFactory.sol";
-import "./interface/ITokenVault.sol";
+import "../interface/ITokenExchange.sol";
+import "../interface/ITokenFactory.sol";
+import "../interface/ITokenVault.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
@@ -56,9 +56,9 @@ contract MultiAction {
                 weth != address(0),
                 "invalid-params");
 
-        _ideaTokenExchange = IIdeaTokenExchange(ideaTokenExchange);
-        _ideaTokenFactory = IIdeaTokenFactory(ideaTokenFactory);
-        _ideaTokenVault = IIdeaTokenVault(ideaTokenVault);
+        _ideaTokenExchange = ITokenExchange(ideaTokenExchange);
+        _ideaTokenFactory = ITokenFactory(ideaTokenFactory);
+        _ideaTokenVault = ITokenVault(ideaTokenVault);
         _dai = IERC20(dai);
         _uniswapV2Router02 = IUniswapV2Router02(uniswapV2Router02);
         _uniswapV2Factory = IUniswapV2Factory(IUniswapV2Router02(uniswapV2Router02).factory());
@@ -84,7 +84,7 @@ contract MultiAction {
                            uint lockDuration,
                            address recipient) external payable {
 
-        IIdeaTokenExchange exchange = _ideaTokenExchange;
+        ITokenExchange exchange = _ideaTokenExchange;
 
         uint buyAmount = amount;
         uint buyCost = exchange.getCostForBuyingTokens(ideaToken, amount);
@@ -115,7 +115,7 @@ contract MultiAction {
                             uint minPrice,
                             address payable recipient) external {
         
-        IIdeaTokenExchange exchange = _ideaTokenExchange;
+        ITokenExchange exchange = _ideaTokenExchange;
         IERC20 dai = _dai;
 
         uint sellPrice = exchange.getPriceForSellingTokens(ideaToken, amount);
@@ -204,7 +204,7 @@ contract MultiAction {
      */
     function buyAndLock(address ideaToken, uint amount, uint fallbackAmount, uint cost, uint lockDuration, address recipient) external {
 
-        IIdeaTokenExchange exchange = _ideaTokenExchange;
+        ITokenExchange exchange = _ideaTokenExchange;
 
         uint buyAmount = amount;
         uint buyCost = exchange.getCostForBuyingTokens(ideaToken, amount);
@@ -247,7 +247,7 @@ contract MultiAction {
             Refund the remaining ETH to the user.
         */
         if(address(this).balance > 0) {
-            msg.sender.transfer(address(this).balance);
+            payable(msg.sender).transfer(address(this).balance);
         }
     }
 
@@ -261,7 +261,7 @@ contract MultiAction {
      */
     function buyAndLockInternal(address ideaToken, uint amount, uint cost, uint lockDuration, address recipient) internal {
 
-        IIdeaTokenVault vault = _ideaTokenVault;
+        ITokenVault vault = _ideaTokenVault;
     
         buyInternal(ideaToken, amount, cost, address(this));
         require(IERC20(ideaToken).approve(address(vault), amount), "approve");
@@ -278,7 +278,7 @@ contract MultiAction {
      */
     function buyInternal(address ideaToken, uint amount, uint cost, address recipient) internal {
 
-        IIdeaTokenExchange exchange = _ideaTokenExchange;
+        ITokenExchange exchange = _ideaTokenExchange;
 
         require(_dai.approve(address(exchange), cost), "approve");
         exchange.buyTokens(ideaToken, amount, amount, cost, recipient);
@@ -294,10 +294,10 @@ contract MultiAction {
      */
     function addTokenInternal(string memory tokenName, uint marketID) internal returns (address) {
 
-        IIdeaTokenFactory factory = _ideaTokenFactory;
+        ITokenFactory factory = _ideaTokenFactory;
 
         factory.addToken(tokenName, marketID, msg.sender);
-        return address(factory.getTokenInfo(marketID, factory.getTokenIDByName(tokenName, marketID) ).ideaToken);
+        return address(factory.getTokenInfo(marketID, factory.getTokenIDByName(tokenName, marketID) ).serviceToken);
     }
 
     /**
@@ -426,7 +426,7 @@ contract MultiAction {
                                                                      outputAmount,
                                                                      path,
                                                                      address(this),
-                                                                     now + 1);
+                                                                     block.timestamp + 1);
 
         if(outputCurrency == address(0)) {
             // If the output is ETH we withdraw from WETH

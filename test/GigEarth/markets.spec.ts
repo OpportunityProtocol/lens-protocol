@@ -7,7 +7,7 @@ import { SimpleCentralizedArbitrator } from '../../typechain-types/SimpleCentral
 import { waitForTx, initEnv, getAddrs, ZERO_ADDRESS } from '../../tasks/helpers/utils';
 import { getContractFactory } from '@nomiclabs/hardhat-ethers/types';
 import '@nomiclabs/hardhat-ethers';
-import { makeSuiteCleanRoom, moduleGlobals } from '../__setup.spec';
+import { adminAccount, baseCost, domainNoSubdomainNameVerifier, employer, hatchTokens, ideaTokenFactory, makeSuiteCleanRoom, moduleGlobals, platformFeeRate, priceRise, tradingFeeRate, worker, workerAddress, zeroAddress } from '../__setup.spec';
 
 import { 
   lensHub,
@@ -19,19 +19,12 @@ import {
   relationshipReferenceModule
 } from '../__setup.spec'
 
-import { GigEarth, GigEarthInterface, } from '../../typechain-types/GigEarth';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { getSetDispatcherWithSigParts } from '../helpers/utils';
-import { CreateProfileDataStruct, SetDispatcherWithSigDataStruct } from '../../typechain-types/LensHub';
-import { EIP712SignatureStruct } from '../../typechain-types/LensNFTBase';
+import { getPostWithSigParts, getSetDispatcherWithSigParts } from '../helpers/utils';
+import { CreateProfileDataStruct, SetDispatcherWithSigDataStruct, PostWithSigDataStruct, EIP712SignatureStruct } from '../../typechain-types/LensHub';
 
 describe("Markets", async function () {
-  let marketDeployer, employer : SignerWithAddress, worker : SignerWithAddress, governance, treasury
-
-  let gigEarthInstance
-
-  let TestDai
-  let testDaiInstance : TestDai
+  let marketDeployer
 
   const FLATE_RATE_CONTRACT_INIT_DATA = { escrow: '0', valuePtr: '0', _taskMetadataPtr: '8dj39Dks8' }
   const MILESTONE_CONTRACT_INIT_DATA = { escrow: '0', valuePtr: '0', taskMetadataPtr: '8js82kd0f', numMilstones: 5}
@@ -41,14 +34,67 @@ describe("Markets", async function () {
     
       const generalAddrs = await ethers.getSigners()
       marketDeployer = generalAddrs[0]
-      employer = generalAddrs[1]
-      worker = generalAddrs[2]
 
-      TestDai = await ethers.getContractFactory("TestDai")
-      testDaiInstance  = await TestDai.deploy(1)
-  
+      //create worker profile
+      const workerProfileData : CreateProfileDataStruct = {
+        to: workerAddress,
+        handle: 'randomworker',
+        imageURI: 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
+        followModule: relationshipFollowModule.address,
+        followModuleInitData: [],
+        followNFTURI: 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
+      }
+
+      const employerNonce = await employer.getTransactionCount()
+      const employerDeadline = Date.now().toString()
+      const post = await getPostWithSigParts('randomworker', 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan', zeroAddress, [], zeroAddress, [], employerNonce, employerDeadline)
+
+      gigEarth.connect(worker).registerWorker(workerProfileData);
+
+      //create market
+      const marketName = 'Writing and Translation'
+      ideaTokenFactory.connect(adminAccount).addMarket(
+				marketName,
+				domainNoSubdomainNameVerifier.address,
+				baseCost,
+				priceRise,
+			  hatchTokens,
+				tradingFeeRate,
+				platformFeeRate,
+				false
+			)
+
+      //create service
+      const marketID = await ideaTokenFactory.getMarketIDByName(marketName)
+      const postServiceEIP712SignatureStruct: EIP712SignatureStruct = {
+        v: post.v,
+        r: post.r,
+        s: post.s,
+        deadline: employerDeadline
+      }
+      const postWithSig : PostWithSigDataStruct = {
+        profileId: 'randomworker',
+        contentURI: 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
+        collectModule: zeroAddress,
+        collectModuleInitData: [],
+        referenceModule: zeroAddress,
+        referenceModuleInitData: [],
+        sig: postServiceEIP712SignatureStruct
+      };
+
+      gigEarth.connect(worker).createService(
+        marketID, 
+        'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan', 
+        100, 
+        10,
+        10,
+        postWithSig)
+
+      const tokenID = ideaTokenFactory.connect(adminAccount).getTokenIDByName("Name", marketID)
+      console.log("The token id is: " + tokenID)
+
       // Set default values for contracts to deploy
-      FLATE_RATE_CONTRACT_INIT_DATA.escrow = '0'
+      /*FLATE_RATE_CONTRACT_INIT_DATA.escrow = '0'
       FLATE_RATE_CONTRACT_INIT_DATA.valuePtr = testDaiInstance.address
   
       MILESTONE_CONTRACT_INIT_DATA.escrow = FLATE_RATE_CONTRACT_INIT_DATA.escrow
@@ -84,7 +130,7 @@ describe("Markets", async function () {
 
       
       const employerProfileId = await lensHub.getProfileIdByHandle(employerProfileData.handle);
-      const workerProfileId = await lensHub.getProfileIdByHandle(workerProfileData.handle);
+      const workerProfileId = await lensHub.getProfileIdByHandle(workerProfileData.handle);*/
      /*
       const employerNonce = await employer.getTransactionCount()
       console.log('EMPLOYER NONCE: ' + employerNonce)
@@ -138,7 +184,7 @@ describe("Markets", async function () {
    context('GigEarth', function() {
       it("happy path - flat rate relationship - employer should create relationship and successfully complete with a worker", async () => {
 
-        const marketDeploymentTx = await gigEarth
+       /* const marketDeploymentTx = await gigEarth
           .connect(marketDeployer)
           .createMarket(
             "Test Market One", 
@@ -171,7 +217,7 @@ describe("Markets", async function () {
             console.log('resolved')
           expect(await testDaiInstance.balanceOf(employer.address)).to.equal(BigNumber.from(0))
           expect(await testDaiInstance.balanceOf(worker.address)).to.equal(BigNumber.from(2000))
-          console.log('balance works out')
+          console.log('balance works out')*/
       })
     })
   })
