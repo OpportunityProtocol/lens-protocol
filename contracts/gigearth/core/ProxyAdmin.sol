@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 // https://github.com/OpenZeppelin/openzeppelin-upgrades/blob/master/packages/core/contracts/proxy/ProxyAdmin.sol
 
-pragma solidity 0.6.9;
+pragma solidity ^0.8.7;
 
-import "../../shared/util/Ownable.sol";
+import "./Ownable.sol";
 import "./AdminUpgradeabilityProxy.sol";
 
 /**

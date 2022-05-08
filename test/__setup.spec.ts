@@ -3,8 +3,9 @@ import { parseEther } from '@ethersproject/units';
 import '@nomiclabs/hardhat-ethers';
 import { expect, use } from 'chai';
 import { solidity } from 'ethereum-waffle';
-import { BytesLike, Signer, Wallet } from 'ethers';
+import { BytesLike, Signer, Wallet, BigNumber } from 'ethers';
 import { ethers } from 'hardhat';
+
 import {
   ApprovalFollowModule,
   ApprovalFollowModule__factory,
@@ -56,6 +57,35 @@ import {
   LensPeriphery__factory,
   ProfileFollowModule,
   ProfileFollowModule__factory,
+  TokenFactory__factory,
+  TokenExchange__factory,
+  TokenVault__factory,
+  MultiAction__factory,
+  InterestManagerCompound__factory,
+  ServiceToken__factory,
+  ProxyAdmin__factory,
+  AdminUpgradeabilityProxy__factory,
+  DomainNoSubdomainNameVerifier__factory,
+  TestERC20__factory,
+  TestComptroller__factory,
+  TestCDai__factory,
+  TestERC20,
+  TestComptroller,
+  TestCDai,
+  InterestManagerCompound,
+  ServiceToken,
+  TokenFactory,
+  ProxyAdmin,
+  TokenExchange,
+  AdminUpgradeabilityProxy,
+  TokenVault,
+  TestUniswapV2Router02,
+  TestUniswapV2Router02__factory,
+  TestUniswapV2Factory,
+  TestUniswapV2Factory__factory,
+  MultiAction,
+  DomainNoSubdomainNameVerifier,
+  NetworkManager__factory,
 } from '../typechain-types';
 import { LensHubLibraryAddresses } from '../typechain-types/factories/LensHub__factory';
 import { FAKE_PRIVATEKEY, ZERO_ADDRESS } from './helpers/constants';
@@ -111,6 +141,10 @@ export let moduleGlobals: ModuleGlobals;
 export let helper: Helper;
 export let gigEarthGovernance : Signer;
 export let gigEarthTreasury: Signer;
+export let employer: Signer;
+export let worker: Signer;
+export let employerAddress: string;
+export let workerAddress: string;
 export let lensPeriphery: LensPeriphery;
 
 /* Modules */
@@ -137,6 +171,38 @@ export let followerOnlyReferenceModule: FollowerOnlyReferenceModule;
 export let mockReferenceModule: MockReferenceModule;
 export let relationshipReferenceModule: RelationshipContentReferenceModule
 
+//ideamarket core
+export let dai: TestERC20;
+export let comp: TestERC20;
+export let wEth: TestERC20
+export let comptroller: TestComptroller;
+export let cDai: TestCDai;
+export let interestManagerCompound: InterestManagerCompound;
+export let ideaTokenLogic: ServiceToken;
+export let ideaTokenFactory: TokenFactory;
+export let proxyAdmin: ProxyAdmin;
+export let ideaTokenExchangeLogic: TokenExchange;
+export let ideaTokenExchangeInitCall
+export let ideaTokenExchange
+export let ideaTokenExchangeProxy: AdminUpgradeabilityProxy;
+export let tokenVault: TokenVault;
+export let uniswapV2Router02: TestUniswapV2Router02
+export let uniswapV2Factory: TestUniswapV2Factory
+export let multiAction: MultiAction
+export let domainNoSubdomainNameVerifier: DomainNoSubdomainNameVerifier
+
+export const tenPow18 = BigNumber.from('1000000000000000000')
+export let adminAccount
+export let adminAccountAddress
+export const zeroAddress = '0x0000000000000000000000000000000000000000'
+export const oneAddress = '0x0000000000000000000000000000000000000001'
+export const twoAddress = '0x0000000000000000000000000000000000000002'
+export const baseCost = BigNumber.from('100000000000000000') // 10**17 = $0.1
+export const priceRise = BigNumber.from('100000000000000') // 10**14 = $0.0001
+export const hatchTokens = BigNumber.from('1000000000000000000000') // 10**21 = 1000
+export const tradingFeeRate = BigNumber.from('100')
+export const platformFeeRate = BigNumber.from('50')
+
 export function makeSuiteCleanRoom(name: string, tests: () => void) {
   describe(name, () => {
     beforeEach(async function () {
@@ -158,8 +224,12 @@ before(async function () {
   userTwo = accounts[2];
   userThree = accounts[4];
   governance = accounts[3];
-  gigEarthGovernance = accounts[4]
+  gigEarthGovernance = accounts[4]  
+  adminAccount = gigEarthGovernance
+  adminAccountAddress = await gigEarthGovernance.getAddress()
   gigEarthTreasury = accounts[5]
+  employer = accounts[6]
+  worker = accounts[7]
 
   deployerAddress = await deployer.getAddress();
   userAddress = await user.getAddress();
@@ -167,7 +237,10 @@ before(async function () {
   userThreeAddress = await userThree.getAddress();
   governanceAddress = await governance.getAddress();
   treasuryAddress = await accounts[4].getAddress();
+  employerAddress = await accounts[6].getAddress()
+  workerAddress = await accounts[7].getAddress()
   mockModuleData = abiCoder.encode(['uint256'], [1]);
+
   // Deployment
   helper = await new Helper__factory(deployer).deploy();
   moduleGlobals = await new ModuleGlobals__factory(deployer).deploy(
@@ -207,22 +280,103 @@ before(async function () {
     LENS_HUB_NFT_SYMBOL,
     governanceAddress,
   ]);
+
   let proxy = await new TransparentUpgradeableProxy__factory(deployer).deploy(
     lensHubImpl.address,
     deployerAddress,
     data
   );
+  
 
   // Connect the hub proxy to the LensHub factory and the user for ease of use.
   lensHub = LensHub__factory.connect(proxy.address, user);
-  simpleArbitrator = await new SimpleCentralizedArbitrator__factory(deployer).deploy()
-  gigEarth = await new GigEarth__factory(deployer).deploy(await gigEarthGovernance.getAddress(), await gigEarthTreasury.getAddress(), simpleArbitrator.address, proxy.address)
-  
-  relationshipFollowModule = await new RelationshipFollowModule__factory(deployer).deploy(proxy.address, gigEarth.address)
-  relationshipReferenceModule = await new RelationshipContentReferenceModule__factory(deployer).deploy(proxy.address, moduleGlobals.address, gigEarth.address)
 
-  await gigEarth.connect(gigEarthGovernance).setLensContentReferenceModule(relationshipReferenceModule.address)
-  await gigEarth.connect(gigEarthGovernance).setLensFollowModule(relationshipFollowModule.address)
+   domainNoSubdomainNameVerifier = await new DomainNoSubdomainNameVerifier__factory(deployer).deploy()
+   await domainNoSubdomainNameVerifier.deployed()
+
+   dai = await new TestERC20__factory(deployer).deploy('DAI', 'DAI')
+   await dai.deployed()
+
+   comp = await new TestERC20__factory(deployer).deploy('COMP', 'COMP')
+   await comp.deployed()
+
+   comptroller = await new TestComptroller__factory(deployer).deploy()
+   await comptroller.deployed()
+
+   cDai = await new TestCDai__factory(deployer).deploy(dai.address, comp.address, comptroller.address)
+   await cDai.deployed()
+   await cDai.setExchangeRate(tenPow18)
+
+   tokenVault = await new TokenVault__factory(deployer).deploy()
+   await tokenVault.deployed()
+
+   wEth = await new TestERC20__factory(deployer).deploy('WETH', 'WETH')
+   await wEth.deployed()
+
+   uniswapV2Factory = await new TestUniswapV2Factory__factory(deployer).deploy(zeroAddress)
+   uniswapV2Router02 = await new TestUniswapV2Router02__factory(deployer).deploy(uniswapV2Factory.address, wEth.address)
+
+
+  multiAction = await new MultiAction__factory(deployer).deploy(ideaTokenExchange.address, ideaTokenFactory.address, tokenVault.address, dai.address, uniswapV2Router02.address, wEth.address)
+  await multiAction.deployed()
+
+  //deploy core
+  interestManagerCompound = await new InterestManagerCompound__factory(deployer).deploy()
+  await interestManagerCompound.deployed()
+
+  ideaTokenLogic = await new ServiceToken__factory(deployer).deploy()
+  await ideaTokenLogic.deployed()
+
+  ideaTokenFactory = await new TokenFactory__factory(deployer).deploy()
+  await ideaTokenFactory.deployed()
+
+  proxyAdmin = await new ProxyAdmin__factory(deployer).deploy(await gigEarthGovernance.getAddress())
+  await proxyAdmin.deployed()
+
+  ideaTokenExchangeLogic = await new TokenExchange__factory(deployer).deploy()
+  await ideaTokenExchangeLogic.deployed()
+
+  ideaTokenExchangeInitCall = ideaTokenExchangeLogic.interface.encodeFunctionData('initialize', [
+    await gigEarthGovernance.getAddress(),
+    await gigEarthGovernance.getAddress(),
+    await gigEarthGovernance.getAddress(),
+    interestManagerCompound.address,
+    dai.address,
+  ])
+
+  ideaTokenExchangeProxy = await new AdminUpgradeabilityProxy__factory(deployer).deploy(
+    ideaTokenExchangeLogic.address,
+    proxyAdmin.address,
+    ideaTokenExchangeInitCall
+  )
+  await ideaTokenExchangeProxy.deployed()
+  
+  ideaTokenExchange = new ethers.Contract(
+    ideaTokenExchangeProxy.address,
+    ideaTokenExchangeProxy.interface,
+    ideaTokenExchangeProxy.signer
+  )
+
+  await interestManagerCompound
+			.connect(adminAccount)
+			.initialize(ideaTokenExchange.address, dai.address, cDai.address, comp.address, oneAddress)
+
+		await ideaTokenFactory
+			.connect(adminAccount)
+			.initialize(adminAccountAddress, ideaTokenExchange.address, ideaTokenLogic.address, adminAccountAddress)
+
+		await ideaTokenExchange.connect(adminAccount).setIdeaTokenFactoryAddress(ideaTokenFactory.address)
+
+
+    simpleArbitrator = await new SimpleCentralizedArbitrator__factory(deployer).deploy()
+    gigEarth = await new NetworkManager__factory(deployer).deploy(await gigEarthGovernance.getAddress(), await gigEarthTreasury.getAddress(), simpleArbitrator.address, proxy.address, dai.address)
+    gigEarth.initialize(adminAccountAddress, ideaTokenFactory.address)
+
+    relationshipFollowModule = await new RelationshipFollowModule__factory(deployer).deploy(proxy.address, gigEarth.address)
+    relationshipReferenceModule = await new RelationshipContentReferenceModule__factory(deployer).deploy(proxy.address, moduleGlobals.address, gigEarth.address)
+  
+    await gigEarth.connect(gigEarthGovernance).setLensContentReferenceModule(relationshipReferenceModule.address)
+    await gigEarth.connect(gigEarthGovernance).setLensFollowModule(relationshipFollowModule.address)
 
   // LensPeriphery
   lensPeriphery = await new LensPeriphery__factory(deployer).deploy(lensHub.address);

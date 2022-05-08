@@ -52,8 +52,8 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     uint _numMarkets;
 
     mapping (string => MarketInfo) _marketInfo;
-
- //   INetworkManager _networkManager;
+ 
+    address _networkManager;
 
     event NewMarket(uint id,
                     string name,
@@ -71,6 +71,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     event NewNameVerifier(uint marketID, address nameVerifier);
 
     modifier onlyNetworkManager() {
+        require(msg.sender == _networkManager);
         _;
     }
 
@@ -85,7 +86,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
         setOwnerInternal(owner); // Checks owner to be non-zero
         _tokenExchange = tokenExchange;
         _tokenLogic = tokenLogic;
-      //  networkManager = INetworkManager(networkManager);
+        _networkManager = networkManager;
     }
 
     /**

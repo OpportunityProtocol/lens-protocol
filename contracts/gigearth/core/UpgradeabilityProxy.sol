@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 // https://github.com/OpenZeppelin/openzeppelin-upgrades/blob/master/packages/core/contracts/proxy/UpgradeabilityProxy.sol
 
-pragma solidity 0.6.9;
+pragma solidity ^0.8.7;
 
-import "../../shared/proxy/Proxy.sol";
+import "./Proxy.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
 /**

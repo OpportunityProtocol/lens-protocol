@@ -11,13 +11,14 @@ import "./libraries/Queue.sol";
 import "./libraries/NetworkInterface.sol";
 import "./interface/ITokenFactory.sol";
 import "./core/TokenExchange.sol";
+import "./core/Initializable.sol";
 //import "./interface/INetworkManager.sol";
 
 interface IContentReferenceModule {
     function getPubIdByRelationship(uint256 _id) external view returns(uint256);
 }
 
-contract NetworkManager is IArbitrable, IEvidence {
+contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvidence {
     using Queue for Queue.Uint256Queue;
 
     /**
@@ -67,6 +68,7 @@ contract NetworkManager is IArbitrable, IEvidence {
     uint256 public constant arbitrationFeeDepositPeriod = 1;
     uint8 public constant OPPORTUNITY_WITHDRAWAL_FEE = 10;
 
+    address _owner;
     address immutable governance;
     address immutable treasury;
     address LENS_FOLLOW_MODULE;
@@ -125,7 +127,6 @@ contract NetworkManager is IArbitrable, IEvidence {
         address _treasury,
         address _arbitrator, 
         address _lensHub,
-        address tokenFactory,
         address dai
     ) 
     {
@@ -133,8 +134,14 @@ contract NetworkManager is IArbitrable, IEvidence {
         treasury = _treasury;
         arbitrator = IArbitrator(_arbitrator);
         lensHub = ILensHub(_lensHub);
-        _tokenFactory = ITokenFactory(_tokenFactory);
         _dai = IERC20(dai);
+    }
+
+    function initialize(address owner, address tokenFactory) external virtual initializer {
+        require(tokenFactory != address(0), "token factory cannot be 0");
+        require(owner != address(0), "owner cannot be 0");
+        _owner = owner;
+        _tokenFactory = ITokenFactory(tokenFactory);
     }
 
     ///////////////////////////////////////////// User
@@ -184,7 +191,7 @@ contract NetworkManager is IArbitrable, IEvidence {
         uint256 referralSharePayout,
         DataTypes.EIP712Signature calldata postSignature
     ) external {
-        uint256 serviceId = _tokenFactory.addToken(metadataPtr, marketId, msg.sender);
+        uint256 serviceId = _tokenFactory.addToken("Name", marketId, msg.sender);
 
         //create service
         NetworkInterface.Service memory newService = NetworkInterface.Service({
