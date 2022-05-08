@@ -56,6 +56,10 @@ import {
   LensPeriphery__factory,
   ProfileFollowModule,
   ProfileFollowModule__factory,
+  FollowNFT,
+  CollectNFT,
+  RevertFollowModule,
+  RevertFollowModule__factory,
 } from '../typechain-types';
 import { LensHubLibraryAddresses } from '../typechain-types/factories/LensHub__factory';
 import { FAKE_PRIVATEKEY, ZERO_ADDRESS } from './helpers/constants';
@@ -96,8 +100,6 @@ export let userAddress: string;
 export let userTwoAddress: string;
 export let userThreeAddress: string;
 export let governanceAddress: string;
-export let followNFTImplAddress: string;
-export let collectNFTImplAddress: string;
 export let treasuryAddress: string;
 export let testWallet: Wallet;
 export let lensHubImpl: LensHub;
@@ -112,6 +114,8 @@ export let helper: Helper;
 export let gigEarthGovernance : Signer;
 export let gigEarthTreasury: Signer;
 export let lensPeriphery: LensPeriphery;
+export let followNFTImpl: FollowNFT;
+export let collectNFTImpl: CollectNFT;
 
 /* Modules */
 
@@ -129,6 +133,7 @@ export let simpleArbitrator : SimpleCentralizedArbitrator
 export let approvalFollowModule: ApprovalFollowModule;
 export let profileFollowModule: ProfileFollowModule;
 export let feeFollowModule: FeeFollowModule;
+export let revertFollowModule: RevertFollowModule;
 export let mockFollowModule: MockFollowModule;
 export let relationshipFollowModule: RelationshipFollowModule
 
@@ -194,8 +199,8 @@ before(async function () {
 
   const hubProxyAddress = computeContractAddress(deployerAddress, nonce + 3); //'0x' + keccak256(RLP.encode([deployerAddress, hubProxyNonce])).substr(26);
 
-  const followNFTImpl = await new FollowNFT__factory(deployer).deploy(hubProxyAddress);
-  const collectNFTImpl = await new CollectNFT__factory(deployer).deploy(hubProxyAddress);
+  followNFTImpl = await new FollowNFT__factory(deployer).deploy(hubProxyAddress);
+  collectNFTImpl = await new CollectNFT__factory(deployer).deploy(hubProxyAddress);
 
   lensHubImpl = await new LensHub__factory(hubLibs, deployer).deploy(
     followNFTImpl.address,
@@ -257,6 +262,7 @@ before(async function () {
   );
   profileFollowModule = await new ProfileFollowModule__factory(deployer).deploy(lensHub.address);
   approvalFollowModule = await new ApprovalFollowModule__factory(deployer).deploy(lensHub.address);
+  revertFollowModule = await new RevertFollowModule__factory(deployer).deploy(lensHub.address);
   followerOnlyReferenceModule = await new FollowerOnlyReferenceModule__factory(deployer).deploy(
     lensHub.address
   );
