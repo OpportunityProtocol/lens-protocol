@@ -23,7 +23,6 @@ import {
   FollowerOnlyReferenceModule,
   FollowerOnlyReferenceModule__factory,
   FollowNFT__factory,
-  GigEarth,
   Helper,
   Helper__factory,
   InteractionLogic__factory,
@@ -41,7 +40,6 @@ import {
   ModuleGlobals__factory,
   ProfileTokenURILogic__factory,
   PublishingLogic__factory,
-  RelationshipContentReferenceModule,
   RelationshipFollowModule,
   RevertCollectModule,
   RevertCollectModule__factory,
@@ -50,8 +48,6 @@ import {
   TimedFeeCollectModule__factory,
   TransparentUpgradeableProxy__factory,
   RelationshipFollowModule__factory,
-  RelationshipContentReferenceModule__factory,
-  GigEarth__factory,
   SimpleCentralizedArbitrator__factory,
   LensPeriphery,
   LensPeriphery__factory,
@@ -90,6 +86,9 @@ import {
   MultiAction,
   DomainNoSubdomainNameVerifier,
   NetworkManager__factory,
+  GigEarthContentReferenceModule,
+  NetworkManager,
+  GigEarthContentReferenceModule__factory,
 } from '../typechain-types';
 import { LensHubLibraryAddresses } from '../typechain-types/factories/LensHub__factory';
 import { FAKE_PRIVATEKEY, ZERO_ADDRESS } from './helpers/constants';
@@ -160,7 +159,7 @@ export let freeCollectModule: FreeCollectModule;
 export let revertCollectModule: RevertCollectModule;
 export let limitedFeeCollectModule: LimitedFeeCollectModule;
 export let limitedTimedFeeCollectModule: LimitedTimedFeeCollectModule;
-export let gigEarth : GigEarth
+export let gigEarth : NetworkManager
 export let simpleArbitrator : SimpleCentralizedArbitrator
 
 // Follow
@@ -174,7 +173,7 @@ export let relationshipFollowModule: RelationshipFollowModule
 // Reference
 export let followerOnlyReferenceModule: FollowerOnlyReferenceModule;
 export let mockReferenceModule: MockReferenceModule;
-export let relationshipReferenceModule: RelationshipContentReferenceModule
+export let relationshipReferenceModule: GigEarthContentReferenceModule
 
 //ideamarket core
 export let dai: TestERC20;
@@ -377,8 +376,8 @@ before(async function () {
     gigEarth = await new NetworkManager__factory(deployer).deploy(await gigEarthGovernance.getAddress(), await gigEarthTreasury.getAddress(), simpleArbitrator.address, proxy.address, dai.address)
     gigEarth.initialize(adminAccountAddress, ideaTokenFactory.address)
 
-    relationshipFollowModule = await new RelationshipFollowModule__factory(deployer).deploy(proxy.address, gigEarth.address)
-    relationshipReferenceModule = await new RelationshipContentReferenceModule__factory(deployer).deploy(proxy.address, moduleGlobals.address, gigEarth.address)
+    //relationshipFollowModule = await new Gig(deployer).deploy(proxy.address, gigEarth.address)
+    relationshipReferenceModule = await new GigEarthContentReferenceModule__factory(deployer).deploy(moduleGlobals.address)
   
     await gigEarth.connect(gigEarthGovernance).setLensContentReferenceModule(relationshipReferenceModule.address)
     await gigEarth.connect(gigEarthGovernance).setLensFollowModule(relationshipFollowModule.address)

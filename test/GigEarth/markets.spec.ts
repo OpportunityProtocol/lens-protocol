@@ -88,7 +88,7 @@ describe("Markets", async function () {
         100, 
         10,
         10,
-        postWithSig)
+        postServiceEIP712SignatureStruct)
 
       const tokenID = ideaTokenFactory.connect(adminAccount).getTokenIDByName("Name", marketID)
       console.log("The token id is: " + tokenID)
