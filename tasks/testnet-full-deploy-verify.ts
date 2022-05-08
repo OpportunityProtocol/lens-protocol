@@ -25,6 +25,7 @@ import {
   MockProfileCreationProxy__factory,
   UIDataProvider__factory,
   ProfileFollowModule__factory,
+  RevertFollowModule__factory,
 } from '../typechain-types';
 import { deployWithVerify, waitForTx } from './helpers/utils';
 
@@ -230,6 +231,14 @@ task(
     [lensHub.address],
     'contracts/core/modules/follow/ProfileFollowModule.sol:ProfileFollowModule'
   );
+  console.log('\n\t-- Deploying revertFollowModule --');
+  const revertFollowModule = await deployWithVerify(
+    new RevertFollowModule__factory(deployer).deploy(lensHub.address, {
+      nonce: deployerNonce++,
+    }),
+    [lensHub.address],
+    'contracts/core/modules/follow/RevertFollowModule.sol:RevertFollowModule'
+  );
   // --- COMMENTED OUT AS THIS IS NOT A LAUNCH MODULE ---
   // console.log('\n\t-- Deploying approvalFollowModule --');
   // const approvalFollowModule = await deployWithVerify(
@@ -263,10 +272,17 @@ task(
   // Deploy MockProfileCreationProxy
   console.log('\n\t-- Deploying Profile Creation Proxy --');
   const profileCreationProxy = await deployWithVerify(
-    new MockProfileCreationProxy__factory(deployer).deploy(lensHub.address, {
-      nonce: deployerNonce++,
-    }),
-    [lensHub.address],
+    new MockProfileCreationProxy__factory(deployer).deploy(
+      4,
+      '.test',
+      '.',
+      lensHub.address,
+      governance.address,
+      {
+        nonce: deployerNonce++,
+      }
+    ),
+    [4, '.test', '.', lensHub.address],
     'contracts/mocks/MockProfileCreationProxy.sol:MockProfileCreationProxy'
   );
 
@@ -308,6 +324,9 @@ task(
   await waitForTx(
     lensHub.whitelistFollowModule(profileFollowModule.address, true, { nonce: governanceNonce++ })
   );
+  await waitForTx(
+    lensHub.whitelistFollowModule(revertFollowModule.address, true, { nonce: governanceNonce++ })
+  );
   // --- COMMENTED OUT AS THIS IS NOT A LAUNCH MODULE ---
   // await waitForTx(
   // lensHub.whitelistFollowModule(approvalFollowModule.address, true, {
@@ -342,6 +361,7 @@ task(
     'free collect module': freeCollectModule.address,
     'fee follow module': feeFollowModule.address,
     'profile follow module': profileFollowModule.address,
+    'revert follow module': revertFollowModule.address,
     // --- COMMENTED OUT AS THIS IS NOT A LAUNCH MODULE ---
     // 'approval follow module': approvalFollowModule.address,
     'follower only reference module': followerOnlyReferenceModule.address,
