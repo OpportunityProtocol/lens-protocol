@@ -12,13 +12,14 @@ import "./libraries/NetworkInterface.sol";
 import "./interface/ITokenFactory.sol";
 import "./core/TokenExchange.sol";
 import "./core/Initializable.sol";
+import "hardhat/console.sol";
 //import "./interface/INetworkManager.sol";
 
 interface IContentReferenceModule {
     function getPubIdByRelationship(uint256 _id) external view returns(uint256);
 }
 
-contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvidence {
+contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
     using Queue for Queue.Uint256Queue;
 
     /**
@@ -42,10 +43,6 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
      * @dev To be emitted upon relationship ownership update
      */
     event ContractOwnershipUpdate();
-
-    /**
-     */
-    event OperationResult(address data);
 
     /**
      *
@@ -75,6 +72,8 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
     address LENS_CONTENT_REFERENCE_MODULE;
     ITokenFactory _tokenFactory;
     IERC20 _dai;
+
+    uint256 _protocolFee;
     
     mapping(address => uint256) public addressToLensProfileId;
 
@@ -91,13 +90,10 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
     mapping(uint256 => NetworkInterface.Service) public serviceIdToService;
     mapping(uint256 => NetworkInterface.PurchasedServiceMetadata) public purchasedServiceIdToMetdata;
 
-    //TODO: Add global service/relationship identifier
+    mapping(uint256 => uint256) public relationshipIDToMarketID;
+    mapping(uint256 => uint256) public serviceIDToMarketID;
 
     modifier onlyWhenOwnership(uint256 contractId, NetworkInterface.ContractOwnership ownership) {
-        _;
-    }
-
-    modifier onlyContractEmployer() {
         _;
     }
 
@@ -113,6 +109,10 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
         _;
     }
 
+    modifier onlyContractEmployer() {
+        _;
+    }
+
     modifier onlyContractWorker() {
         _;
     }
@@ -122,25 +122,24 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
         _;
     }
 
-    constructor(
-        address _governance,
+    function initialize(
+        address owner, 
+        address tokenFactory,
         address _treasury,
-        address _arbitrator, 
-        address _lensHub,
-        address dai
-    ) 
-    {
+        address _arbitrator,
+        address _lensHub
+        ) external virtual initializer {
+        require(tokenFactory != address(0), "token factory cannot be address0");
+        require(owner != address(0), "owner cannot be address 0");
+        require(_treasury != address(0), "treasury cannot be address 0");
+        require(_arbitrator != address(0), "arbitrator cannot be address 0");
+        require(_lensHub != address(0), "lens hub cannot be address 0");
+        _owner = owner;
         governance = _governance;
         treasury = _treasury;
         arbitrator = IArbitrator(_arbitrator);
         lensHub = ILensHub(_lensHub);
         _dai = IERC20(dai);
-    }
-
-    function initialize(address owner, address tokenFactory) external virtual initializer {
-        require(tokenFactory != address(0), "token factory cannot be 0");
-        require(owner != address(0), "owner cannot be 0");
-        _owner = owner;
         _tokenFactory = ITokenFactory(tokenFactory);
     }
 
@@ -190,8 +189,9 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
         uint256 initialMaxWaitlistSize,
         uint256 referralSharePayout,
         DataTypes.EIP712Signature calldata postSignature
-    ) external {
-        uint256 serviceId = _tokenFactory.addToken("Name", marketId, msg.sender);
+    ) external returns(uint) {
+        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID(marketId);
+        uint256 serviceId = _tokenFactory.addToken(marketDetails.name, marketDetails.id, msg.sender);
 
         //create service
         NetworkInterface.Service memory newService = NetworkInterface.Service({
@@ -218,14 +218,14 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
             referenceModuleInitData: referenceModuleInitData,
             sig: postSignature
         });
-
         lensHub.postWithSig(vars);
-
         services.push(newService);
         serviceIdToWaitlist[serviceId].initialize();
         serviceIdToService[serviceId] = newService;
-
+        serviceIDToMarketID[serviceId] = marketId;
         emit ServiceCreated();
+
+        return serviceId;
     }
 
     /**
@@ -233,7 +233,7 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
      * @param serviceId The id of the service to purchase
      * @param referral The referrer of the contract
      */
-    function purchaseServiceOffering(uint256 serviceId, address referral) public notServiceOwner {
+    function purchaseServiceOffering(uint256 serviceId, address referral) public notServiceOwner returns(uint) {
         NetworkInterface.Service memory service = serviceIdToService[serviceId];
         uint256 serviceWaitlistSize = getWaitlistLength(serviceId);
 
@@ -254,6 +254,8 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
         require(_dai.transfer(address(this), service.wad), "dai transfer");
 
         emit ServicePurchased(_claimedServiceCounter, serviceId, msg.sender, referral);
+
+        return _claimedServiceCounter;
     }
 
     /**
@@ -261,7 +263,7 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
      * @param serviceId The id of the service to resolve
      * @param purchaseId The purchase id of the service
      */ 
-    function resolveServiceOffering(uint256 serviceId, uint256 purchaseId) public onlyServiceClient() {
+    function resolveService(uint256 serviceId, uint256 purchaseId) public onlyServiceClient {
         NetworkInterface.PurchasedServiceMetadata memory metadata = purchasedServiceIdToMetdata[serviceId];
         NetworkInterface.Service memory service = serviceIdToService[serviceId];
         require(metadata.client == msg.sender, "only client");
@@ -299,8 +301,8 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
      * @param marketId The id of the market the contract will be created in
      * @param taskMetadataPtr The ipfs hash where the metadata of the contract is stored
      */
-    function createContract(uint256 marketId, string calldata taskMetadataPtr) external onlyContractEmployer {
-        NetworkInterface.Relationship memory relationshipData = NetworkInterface.Relationship({
+    function createContract(uint256 marketId, string calldata taskMetadataPtr) external onlyContractEmployer returns(uint) {
+        NetworkInterface.Relationship storage relationshipData = NetworkInterface.Relationship({
                 employer: msg.sender,
                 worker: address(0),
                 taskMetadataPtr: taskMetadataPtr,
@@ -309,15 +311,18 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
                 wad: 0,
                 acceptanceTimestamp: 0,
                 resolutionTimestamp: 0,
-                satisfactoryScore: 0,
                 solutionMetadataPtr: "",
                 marketId: marketId
         });
 
+        uint256 relationshipID = relationships.length - 1;
         relationships.push(relationshipData);
-        relationshipIDToRelationship[relationships.length - 1] = relationshipData;
+        relationshipIDToRelationship[relationshipID] = relationshipData;
+        relationshipIDToMarketID[relationshipID] = marketId;
 
         emit ContractCreated();
+
+        return relationshipID;
     }
 
     /**
@@ -349,9 +354,8 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
      * Resolves the contract and transfers escrow funds to the specified worker of the contract
      * @param contractId The id of the contract
      * @param solutionMetadataPtr The ipfs hash storing the solution metadata
-     * @param satisfactoryScore The solution satisfactory score
      */
-    function resolveContract(uint256 contractId, string calldata solutionMetadataPtr, uint256 satisfactoryScore) external onlyWhenOwnership(contractId, NetworkInterface.ContractOwnership.Claimed) onlyContractEmployer {
+    function resolveContract(uint256 contractId, string calldata solutionMetadataPtr) external onlyWhenOwnership(contractId, NetworkInterface.ContractOwnership.Claimed) onlyContractEmployer {
         NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[contractId];
 
         require(msg.sender == relationship.employer);
@@ -362,7 +366,6 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
         require(testEmptyString.length != 0, "Empty solution metadata pointer.");
 
         _releaseContractFunds(relationship.wad, contractId);
-        relationship.satisfactoryScore = satisfactoryScore;
 
         emit ContractOwnershipUpdate();
     }
@@ -633,6 +636,11 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
      */
     function setMaxWaitlistSize(uint256 serviceId, uint256 newMaxWaitlistSize) public onlyOwnerOrDispatcherOfLensProfileId {}
 
+    /**
+     */
+    function setProtocolFee(uint256 protocolFee) external onlyGovernance {
+        _protocolFee = protocolFee;
+    }
     ///////////////////////////////////////////// Getters
 
     /**
@@ -668,5 +676,9 @@ contract NetworkManager is /*INetworkManager,*/ Initializable, IArbitrable, IEvi
      */
     function getWaitlistLength(uint256 serviceId) public returns(uint256) {
         return serviceIdToWaitlist[serviceId].length();
+    }
+
+    function getProtocolFee() external view returns(uint) {
+        return _protocolFee;
     }
 }

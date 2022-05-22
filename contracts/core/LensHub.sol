@@ -15,9 +15,7 @@ import {LensNFTBase} from './base/LensNFTBase.sol';
 import {LensMultiState} from './base/LensMultiState.sol';
 import {LensHubStorage} from './storage/LensHubStorage.sol';
 import {VersionedInitializable} from '../upgradeability/VersionedInitializable.sol';
-import "hardhat/console.sol";
 import {IERC721Enumerable} from '@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol';
-
 /**
  * @title LensHub
  * @author Lens Protocol
@@ -369,6 +367,8 @@ contract LensHub is LensNFTBase, VersionedInitializable, LensMultiState, LensHub
                 vars.referenceModuleInitData
             );
     }
+
+    
 
     /// @inheritdoc ILensHub
     function postWithSig(DataTypes.PostWithSigData calldata vars)

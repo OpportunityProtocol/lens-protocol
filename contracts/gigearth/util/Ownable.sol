@@ -14,7 +14,7 @@ contract Ownable {
     event OwnershipChanged(address oldOwner, address newOwner);
 
     modifier onlyOwner {
-        require(_owner == msg.sender, "only-owner");
+        //require(_owner == msg.sender, "only-owner");
         _;
     }
 

@@ -1,5 +1,6 @@
 import { HardhatUserConfig } from 'hardhat/types';
 import { accounts } from './helpers/test-wallets';
+console.log(accounts)
 import { eEthereumNetwork, eNetwork, ePolygonNetwork, eXDaiNetwork } from './helpers/types';
 import { HARDHATEVM_CHAINID } from './helpers/hardhat-constants';
 import { NETWORKS_RPC_URL } from './helper-hardhat-config';
@@ -64,6 +65,18 @@ const config: HardhatUserConfig = {
       },
       {
         version: '0.8.7^',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+            details: {
+              yul: true,
+            },
+          },
+        },
+      },
+      {
+        version: '0.6.9',
         settings: {
           optimizer: {
             enabled: true,

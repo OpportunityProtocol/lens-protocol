@@ -17,7 +17,6 @@ library NetworkInterface {
         uint256 wad;
         uint256 acceptanceTimestamp;
         uint256 resolutionTimestamp;
-        uint256 satisfactoryScore;
         string solutionMetadataPtr;
         uint256 marketId;
     }

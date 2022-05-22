@@ -10,7 +10,7 @@ import "./ServiceToken.sol";
 import "../interface/IServiceToken.sol";
 import "../interface/ITokenNameVerifier.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-
+import "hardhat/console.sol";
 import "../interface/INetworkManager.sol";
 /**
  * @title ITokenFactory (Originally: IdeaTokenFactory)
@@ -28,8 +28,6 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
         mapping(uint => TokenInfo) tokens;
         mapping(string => uint) tokenIDs;
         mapping(string => bool) tokenNameUsed;
-
-        MarketDetails marketDetails;
     }
 
     uint constant FEE_SCALE = 10000;
@@ -51,6 +49,11 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     // The amount of existing markets.
     uint _numMarkets;
 
+        mapping(address => uint) _tokenAddressToMarketID;
+
+    //marketID => MarketDetails 
+    mapping(uint => MarketDetails) _marketDetails;
+
     mapping (string => MarketInfo) _marketInfo;
  
     address _networkManager;
@@ -71,7 +74,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     event NewNameVerifier(uint marketID, address nameVerifier);
 
     modifier onlyNetworkManager() {
-        require(msg.sender == _networkManager);
+        require(msg.sender == _networkManager, "sender is not network manager");
         _;
     }
 
@@ -94,7 +97,6 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
      * May only be called by the owner
      *
      * @param marketName The name of the market
-     * @param nameVerifier The address of the name verifier
      * @param baseCost: The initial cost in Dai per IdeaToken in the first interval
      * @param priceRise: The price rise in Dai per IdeaToken per completed interval
      * @param hatchTokens: The amount of IdeaTokens for which the price does not change initially
@@ -102,23 +104,25 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
      * @param platformFeeRate: The platform fee rate
      * @param allInterestToPlatform: If true, all interest goes to the platform instead of the token owner
      */
-    function addMarket(string calldata marketName, address nameVerifier,
+    function addMarket(string calldata marketName,
                        uint baseCost, uint priceRise, uint hatchTokens,
-                       uint tradingFeeRate, uint platformFeeRate, bool allInterestToPlatform) external virtual override onlyOwner returns(uint256) {
+                       uint tradingFeeRate, uint platformFeeRate, bool allInterestToPlatform) external virtual override returns(uint256) {
+
         require(_marketIDs[marketName] == 0, "market-exists");
 
-        require(nameVerifier != address(0) &&
-                baseCost > 0 &&
+        require(baseCost > 0 &&
                 tradingFeeRate.add(platformFeeRate) <= FEE_SCALE,
                 "invalid-params");
 
         uint marketID = ++_numMarkets;
+        console.log("Created market id with: ", marketID);
         MarketInfo storage info = _marketInfo[marketName];
-        info.marketDetails = MarketDetails({
+
+        _marketDetails[marketID] = MarketDetails({
                 exists: true,
                 id: marketID,
                 name: marketName,
-                nameVerifier: ITokenNameVerifier(nameVerifier),
+                nameVerifier: ITokenNameVerifier(address(0)),
                 numTokens: 0,
                 baseCost: baseCost,
                 priceRise: priceRise,
@@ -127,9 +131,14 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
                 platformFeeRate: platformFeeRate,
                 allInterestToPlatform: allInterestToPlatform
         });
-        _marketIDs[marketName] = marketID;
 
-        emitNewMarketEvent(info.marketDetails);
+ 
+        console.log("Exist?: ",  _marketDetails[marketID].exists);
+        _marketIDs[marketName] = marketID;
+        console.log("Worked?");
+        console.log(marketName);
+        console.log(marketID);
+        emitNewMarketEvent(_marketDetails[marketID]);
         return marketID;
     }
 
@@ -154,21 +163,25 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
      * @param lister The address of the account which off-chain software shall see as lister of this token. Only emitted, not stored
      */
     function addToken(string calldata tokenName, uint marketID, address lister) external virtual override onlyNetworkManager returns(uint) {
+        console.log("Market ID: ", marketID);
+        console.log("Token name: ", tokenName);
         MarketInfo storage marketInfo = _markets[marketID];
-        require(marketInfo.marketDetails.exists, "market-not-exist");
-        require(isValidTokenName(tokenName, marketID), "invalid-name");
-
+        require(_marketDetails[marketID].exists, "market-not-exist");
+       // require(isValidTokenName(tokenName, marketID), "invalid-name");
+        console.log("TB");
         IServiceToken serviceToken = IServiceToken(address(new MinimalProxy(_tokenLogic)));
-        serviceToken.initialize(string(abi.encodePacked(marketInfo.marketDetails.name, ": ", tokenName)), _tokenExchange);
-
-        uint tokenID = ++marketInfo.marketDetails.numTokens;
+        _tokenAddressToMarketID[address(serviceToken)] = marketID;
+        console.log("Service token address: ", address(serviceToken));
+        serviceToken.initialize(string(abi.encodePacked( _marketDetails[marketID].name, ": ", tokenName)), _tokenExchange);
+        console.log("TC");
+        uint tokenID = ++ _marketDetails[marketID].numTokens;
         TokenInfo memory tokenInfo = TokenInfo({
             exists: true,
             id: tokenID,
             name: tokenName,
             serviceToken: serviceToken
         });
-
+        console.log("TD");
         marketInfo.tokens[tokenID] = tokenInfo;
         marketInfo.tokenIDs[tokenName] = tokenID;
         marketInfo.tokenNameUsed[tokenName] = true;
@@ -177,7 +190,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
             marketID: marketID,
             tokenID: tokenID
         });
-
+        console.log("TE");
         emit NewToken(tokenID, marketID, tokenName, address(serviceToken), lister);
         return tokenID;
     }
@@ -193,7 +206,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     function isValidTokenName(string calldata tokenName, uint marketID) public virtual view override returns (bool) {
 
         MarketInfo storage marketInfo = _markets[marketID];
-        MarketDetails storage marketDetails = marketInfo.marketDetails;
+        MarketDetails storage marketDetails =  _marketDetails[marketID];
 
         if(marketInfo.tokenNameUsed[tokenName] || !marketDetails.nameVerifier.verifyTokenName(tokenName)) {
             return false;
@@ -221,7 +234,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
      * @return The market details
      */
     function getMarketDetailsByID(uint marketID) external view override returns (MarketDetails memory) {
-        return _markets[marketID].marketDetails;
+        return  _marketDetails[marketID];
     }
 
     /**
@@ -232,11 +245,11 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
      * @return The market details
      */
     function getMarketDetailsByName(string calldata marketName) external view override returns (MarketDetails memory) {
-        return _markets[_marketIDs[marketName]].marketDetails;
+        return  _marketDetails[0];
     }
 
     function getMarketDetailsByTokenAddress(address serviceToken) external view override returns (MarketDetails memory) {
-        return _markets[_tokenIDPairs[serviceToken].marketID].marketDetails;
+        return _marketDetails[0];
     }
 
     /**
@@ -291,7 +304,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
      * @param tradingFeeRate The trading fee
      */
     function setTradingFee(uint marketID, uint tradingFeeRate) external virtual override onlyOwner {
-        MarketDetails storage marketDetails = _markets[marketID].marketDetails;
+        MarketDetails storage marketDetails =  _marketDetails[marketID];
         require(marketDetails.exists, "market-not-exist");
         require(marketDetails.platformFeeRate.add(tradingFeeRate) <= FEE_SCALE, "invalid-fees");
         marketDetails.tradingFeeRate = tradingFeeRate;
@@ -307,7 +320,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
      * @param platformFeeRate The platform fee
      */
     function setPlatformFee(uint marketID, uint platformFeeRate) external virtual override onlyOwner {
-        MarketDetails storage marketDetails = _markets[marketID].marketDetails;
+        MarketDetails storage marketDetails =  _marketDetails[marketID];
         require(marketDetails.exists, "market-not-exist");
         require(marketDetails.tradingFeeRate.add(platformFeeRate) <= FEE_SCALE, "invalid-fees");
         marketDetails.platformFeeRate = platformFeeRate;
@@ -325,10 +338,14 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     function setNameVerifier(uint marketID, address nameVerifier) external virtual override onlyOwner {
         require(nameVerifier != address(0), "zero-verifier");
 
-        MarketDetails storage marketDetails = _markets[marketID].marketDetails;
+        MarketDetails storage marketDetails =  _marketDetails[marketID];
         require(marketDetails.exists, "market-not-exist");
         marketDetails.nameVerifier = ITokenNameVerifier(nameVerifier);
 
         emit NewNameVerifier(marketID, nameVerifier);
+    }
+
+    function getMarketIDByTokenAddress(address tokenAddress) external virtual view override returns(uint) {
+        return _tokenAddressToMarketID[tokenAddress];
     }
 }

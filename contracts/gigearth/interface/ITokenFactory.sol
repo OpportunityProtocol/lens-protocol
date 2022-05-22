@@ -42,7 +42,7 @@ struct MarketDetails {
 }
 
 interface ITokenFactory {
-    function addMarket(string calldata marketName, address nameVerifier,
+    function addMarket(string calldata marketName,
                        uint baseCost, uint priceRise, uint hatchTokens,
                        uint tradingFeeRate, uint platformFeeRate, bool allInterestToPlatform) external returns(uint);
 
@@ -60,4 +60,5 @@ interface ITokenFactory {
     function setTradingFee(uint marketID, uint tradingFeeRate) external;
     function setPlatformFee(uint marketID, uint platformFeeRate) external;
     function setNameVerifier(uint marketID, address nameVerifier) external;
+    function getMarketIDByTokenAddress(address tokenAddress) external view returns(uint);
 }
