@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.7;
 
-import "./IComptroller.sol";
+import "../interface/IComptroller.sol";
 
 /**
  * @title TestComptroller

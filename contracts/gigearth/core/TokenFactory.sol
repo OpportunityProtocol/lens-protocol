@@ -2,9 +2,9 @@
 pragma solidity ^0.8.7;
 pragma experimental ABIEncoderV2;
 
-import "./MinimalProxy.sol";
-import "./Initializable.sol";
-import "./Ownable.sol";
+import "../proxy/MinimalProxy.sol";
+import "../util/Initializable.sol";
+import "../util/Ownable.sol";
 import "../interface/ITokenFactory.sol";
 import "./ServiceToken.sol";
 import "../interface/IServiceToken.sol";

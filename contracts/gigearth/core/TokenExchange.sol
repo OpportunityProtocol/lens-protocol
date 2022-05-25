@@ -2,8 +2,8 @@
 pragma solidity ^0.8.7;
 pragma experimental ABIEncoderV2;
 
-import './Ownable.sol';
-import './Initializable.sol';
+import '../util/Ownable.sol';
+import '../util/Initializable.sol';
 
 import '../interface/ITokenExchange.sol';
 import '../interface/IServiceToken.sol';

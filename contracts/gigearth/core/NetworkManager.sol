@@ -1,23 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.7;
 
-import "./interface/IArbitrable.sol";
-import "./interface/IEvidence.sol";
-import "../interfaces/ILensHub.sol";
-import "../libraries/DataTypes.sol";
+import "../interface/IArbitrable.sol";
+import "../interface/IEvidence.sol";
+import "../../interfaces/ILensHub.sol";
+import "../../libraries/DataTypes.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./libraries/Queue.sol";
-import "./libraries/NetworkInterface.sol";
-import "./interface/ITokenFactory.sol";
-import "./core/TokenExchange.sol";
-import "./core/Initializable.sol";
+import "../libraries/Queue.sol";
+import "../libraries/NetworkInterface.sol";
+import "../interface/ITokenFactory.sol";
+import "./TokenExchange.sol";
+import "../util/Initializable.sol";
 import "hardhat/console.sol";
-//import "./interface/INetworkManager.sol";
-
-interface IContentReferenceModule {
-    function getPubIdByRelationship(uint256 _id) external view returns(uint256);
-}
 
 contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
     using Queue for Queue.Uint256Queue;
@@ -52,26 +47,25 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
     /**
      *
      */
-    event ServiceCreated();
+    event ServiceCreated(uint256 indexed serviceId);
 
     /**
      */
     event ServicePurchased(uint256 indexed purchaseId, uint256 indexed serviceId, address indexed purchaser, address referral);
 
-    IArbitrator immutable arbitrator;
-    ILensHub immutable public lensHub;
+    IArbitrator public arbitrator;
+    ILensHub public lensHub;
 
     uint256 constant numberOfRulingOptions = 2;
     uint256 public constant arbitrationFeeDepositPeriod = 1;
     uint8 public constant OPPORTUNITY_WITHDRAWAL_FEE = 10;
 
-    address _owner;
-    address immutable governance;
-    address immutable treasury;
-    address LENS_FOLLOW_MODULE;
-    address LENS_CONTENT_REFERENCE_MODULE;
-    ITokenFactory _tokenFactory;
-    IERC20 _dai;
+    address public governance;
+    address public treasury;
+    address public LENS_FOLLOW_MODULE;
+    address public LENS_CONTENT_REFERENCE_MODULE;
+    ITokenFactory public _tokenFactory;
+    IERC20 public _dai;
 
     uint256 _protocolFee;
     
@@ -127,7 +121,9 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
         address tokenFactory,
         address _treasury,
         address _arbitrator,
-        address _lensHub
+        address _lensHub,
+        address _governance,
+        address dai
         ) external virtual initializer {
         require(tokenFactory != address(0), "token factory cannot be address0");
         require(owner != address(0), "owner cannot be address 0");
@@ -189,7 +185,7 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
         uint256 initialMaxWaitlistSize,
         uint256 referralSharePayout,
         DataTypes.EIP712Signature calldata postSignature
-    ) external returns(uint) {
+    ) public returns(uint) {
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID(marketId);
         uint256 serviceId = _tokenFactory.addToken(marketDetails.name, marketDetails.id, msg.sender);
 
@@ -223,7 +219,7 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
         serviceIdToWaitlist[serviceId].initialize();
         serviceIdToService[serviceId] = newService;
         serviceIDToMarketID[serviceId] = marketId;
-        emit ServiceCreated();
+        emit ServiceCreated(serviceId);
 
         return serviceId;
     }
@@ -302,7 +298,7 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param taskMetadataPtr The ipfs hash where the metadata of the contract is stored
      */
     function createContract(uint256 marketId, string calldata taskMetadataPtr) external onlyContractEmployer returns(uint) {
-        NetworkInterface.Relationship storage relationshipData = NetworkInterface.Relationship({
+        NetworkInterface.Relationship memory relationshipData = NetworkInterface.Relationship({
                 employer: msg.sender,
                 worker: address(0),
                 taskMetadataPtr: taskMetadataPtr,

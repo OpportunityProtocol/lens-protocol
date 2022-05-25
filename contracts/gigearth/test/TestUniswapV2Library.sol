@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.7;
 
-import './ITestUniswapV2Pair.sol';
-import './ITestUniswapV2Factory.sol';
+import '../interface/ITestUniswapV2Pair.sol';
+import '../interface/ITestUniswapV2Factory.sol';
 
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 

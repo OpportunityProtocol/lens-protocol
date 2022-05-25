@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.7;
 
-import './ITestUniswapV2Factory.sol';
+import '../interface/ITestUniswapV2Factory.sol';
 import './TestUniswapV2Pair.sol';
 
 contract TestUniswapV2Factory is ITestUniswapV2Factory {

@@ -141,7 +141,7 @@ export let moduleGlobals: ModuleGlobals;
 export let helper: Helper;
 export let gigEarthGovernance: Signer;
 export let gigEarthTreasury: Signer;
-export let employer: Signer;
+export let employer: Wallet;
 export let worker: Wallet;
 export let employerAddress: string;
 export let workerAddress: string;
@@ -319,8 +319,10 @@ before(async function () {
   simpleArbitrator = await new SimpleCentralizedArbitrator__factory(deployer).deploy()
   await simpleArbitrator.deployed()
 
-  gigEarth = await new NetworkManager__factory(deployer).deploy(await gigEarthGovernance.getAddress(), await gigEarthTreasury.getAddress(), simpleArbitrator.address, proxy.address, dai.address)
+  gigEarth = await new NetworkManager__factory(deployer).deploy()
   await gigEarth.deployed()
+
+  gigEarth.connect(adminAccount).setProtocolFee(50)
 
   //deploy core
   interestManagerCompound = await new InterestManagerCompound__factory(deployer).deploy()
@@ -340,7 +342,7 @@ before(async function () {
 
   relationshipReferenceModule = await new GigEarthContentReferenceModule__factory(deployer).deploy(moduleGlobals.address)
 
-  await gigEarth.initialize(adminAccountAddress, ideaTokenFactory.address)
+  await gigEarth.initialize(adminAccountAddress, ideaTokenFactory.address, treasuryAddress, simpleArbitrator.address, lensHub.address, governanceAddress, dai.address)
 
   await interestManagerCompound
     .connect(adminAccount)
