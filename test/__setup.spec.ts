@@ -230,8 +230,10 @@ before(async function () {
   adminAccount = gigEarthGovernance
   adminAccountAddress = await gigEarthGovernance.getAddress()
   gigEarthTreasury = accounts[5]
-  employer = new ethers.Wallet('0x275cc4a2bfd4f612625204a20a2280ab53a6da2d14860c47a9f5affe58ad86d4').connect(ethers.provider)
-  worker = new ethers.Wallet('0xc5e8f61d1ab959b397eecc0a37a6517b8e67a0e7cf1f4bce5591f3ed80199122').connect(ethers.provider);
+
+  //last two hardhat private keys
+  employer = new ethers.Wallet('0xaee25d55ce586148a853ca83fdfacaf7bc42d5762c6e7187e6f8e822d8e6a650').connect(ethers.provider)
+  worker = new ethers.Wallet('0xa2e0097c961c67ec197b6865d7ecea6caffc68ebeb00e6050368c8f67fc9c588').connect(ethers.provider);
 
 
   deployerAddress = await deployer.getAddress();
@@ -240,8 +242,8 @@ before(async function () {
   userThreeAddress = await userThree.getAddress();
   governanceAddress = await governance.getAddress();
   treasuryAddress = await accounts[4].getAddress();
-  employerAddress = await accounts[6].getAddress()
-  workerAddress = await accounts[7].getAddress()
+  employerAddress = await employer.address
+  workerAddress = await worker.address
   mockModuleData = abiCoder.encode(['uint256'], [1]);
 
   // Deployment
@@ -322,8 +324,6 @@ before(async function () {
   gigEarth = await new NetworkManager__factory(deployer).deploy()
   await gigEarth.deployed()
 
-  gigEarth.connect(adminAccount).setProtocolFee(50)
-
   //deploy core
   interestManagerCompound = await new InterestManagerCompound__factory(deployer).deploy()
   await interestManagerCompound.deployed()
@@ -340,9 +340,7 @@ before(async function () {
   multiAction = await new MultiAction__factory(deployer).deploy(ideaTokenExchange.address, ideaTokenFactory.address, tokenVault.address, dai.address, uniswapV2Router02.address, wEth.address)
   await multiAction.deployed()
 
-  relationshipReferenceModule = await new GigEarthContentReferenceModule__factory(deployer).deploy(moduleGlobals.address)
-
-  await gigEarth.initialize(adminAccountAddress, ideaTokenFactory.address, treasuryAddress, simpleArbitrator.address, lensHub.address, governanceAddress, dai.address)
+  await gigEarth.initialize(adminAccountAddress, ideaTokenFactory.address, await gigEarthTreasury.getAddress(), simpleArbitrator.address, lensHub.address, await gigEarthGovernance.getAddress(), dai.address)
 
   await interestManagerCompound
     .connect(adminAccount)
@@ -424,9 +422,6 @@ before(async function () {
   ).to.not.be.reverted;
   await expect(
     lensHub.connect(governance).whitelistProfileCreator(gigEarth.address, true)
-  ).to.not.be.reverted;
-  await expect(
-    lensHub.connect(governance).whitelistReferenceModule(relationshipReferenceModule.address, true)
   ).to.not.be.reverted;
 
   expect(lensHub).to.not.be.undefined;

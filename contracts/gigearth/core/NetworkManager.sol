@@ -8,7 +8,7 @@ import "../../libraries/DataTypes.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../libraries/Queue.sol";
-import "../libraries/NetworkInterface.sol";
+import "../libraries/NetworkLibrary.sol";
 import "../interface/ITokenFactory.sol";
 import "./TokenExchange.sol";
 import "../util/Initializable.sol";
@@ -58,7 +58,6 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
 
     uint256 constant numberOfRulingOptions = 2;
     uint256 public constant arbitrationFeeDepositPeriod = 1;
-    uint8 public constant OPPORTUNITY_WITHDRAWAL_FEE = 10;
 
     address public governance;
     address public treasury;
@@ -67,27 +66,27 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
     ITokenFactory public _tokenFactory;
     IERC20 public _dai;
 
-    uint256 _protocolFee;
+    uint256 _protocolFee = 10;
     
     mapping(address => uint256) public addressToLensProfileId;
 
     mapping(uint256 => uint256) public disputeIDtoRelationshipID;
-    mapping(uint256 => NetworkInterface.RelationshipEscrowDetails) public relationshipIDToEscrowDetails;
+    mapping(uint256 => NetworkLibrary.RelationshipEscrowDetails) public relationshipIDToEscrowDetails;
 
-    NetworkInterface.Relationship[] public relationships;
-    mapping(uint256 => NetworkInterface.Relationship) public relationshipIDToRelationship;
+    NetworkLibrary.Relationship[] public relationships;
+    mapping(uint256 => NetworkLibrary.Relationship) public relationshipIDToRelationship;
 
     uint256 _claimedServiceCounter;
-    NetworkInterface.Service[] public services;
+    NetworkLibrary.Service[] public services;
     mapping(uint256 => uint256) public serviceIdToMaxWaitlistSize;
     mapping(uint256 => Queue.Uint256Queue) private serviceIdToWaitlist;
-    mapping(uint256 => NetworkInterface.Service) public serviceIdToService;
-    mapping(uint256 => NetworkInterface.PurchasedServiceMetadata) public purchasedServiceIdToMetdata;
+    mapping(uint256 => NetworkLibrary.Service) public serviceIdToService;
+    mapping(uint256 => NetworkLibrary.PurchasedServiceMetadata) public purchasedServiceIdToMetdata;
 
     mapping(uint256 => uint256) public relationshipIDToMarketID;
     mapping(uint256 => uint256) public serviceIDToMarketID;
 
-    modifier onlyWhenOwnership(uint256 contractId, NetworkInterface.ContractOwnership ownership) {
+    modifier onlyWhenOwnership(uint256 contractId, NetworkLibrary.ContractOwnership ownership) {
         _;
     }
 
@@ -103,7 +102,9 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
         _;
     }
 
-    modifier onlyContractEmployer() {
+    modifier onlyContractEmployer(uint256 contractId) {
+         NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
+         require(msg.sender == relationship.employer, "only contract employer");
         _;
     }
 
@@ -112,7 +113,7 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
     }
     
     modifier onlyGovernance() {
-        require(msg.sender == governance);
+        //require(msg.sender == governance);
         _;
     }
 
@@ -190,7 +191,7 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
         uint256 serviceId = _tokenFactory.addToken(marketDetails.name, marketDetails.id, msg.sender);
 
         //create service
-        NetworkInterface.Service memory newService = NetworkInterface.Service({
+        NetworkLibrary.Service memory newService = NetworkLibrary.Service({
             marketId: marketId,
             owner: msg.sender,
             metadataPtr: metadataPtr,
@@ -230,13 +231,13 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param referral The referrer of the contract
      */
     function purchaseServiceOffering(uint256 serviceId, address referral) public notServiceOwner returns(uint) {
-        NetworkInterface.Service memory service = serviceIdToService[serviceId];
+        NetworkLibrary.Service memory service = serviceIdToService[serviceId];
         uint256 serviceWaitlistSize = getWaitlistLength(serviceId);
 
         require(serviceWaitlistSize < service.maxSize, "max waitlist reached");
 
         _claimedServiceCounter++;
-        purchasedServiceIdToMetdata[_claimedServiceCounter] = NetworkInterface.PurchasedServiceMetadata({
+        purchasedServiceIdToMetdata[_claimedServiceCounter] = NetworkLibrary.PurchasedServiceMetadata({
             exist: true,
             client: msg.sender,
             timestampPurchased: block.timestamp,
@@ -260,8 +261,8 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param purchaseId The purchase id of the service
      */ 
     function resolveService(uint256 serviceId, uint256 purchaseId) public onlyServiceClient {
-        NetworkInterface.PurchasedServiceMetadata memory metadata = purchasedServiceIdToMetdata[serviceId];
-        NetworkInterface.Service memory service = serviceIdToService[serviceId];
+        NetworkLibrary.PurchasedServiceMetadata memory metadata = purchasedServiceIdToMetdata[serviceId];
+        NetworkLibrary.Service memory service = serviceIdToService[serviceId];
         require(metadata.client == msg.sender, "only client");
         require(metadata.exist == true, "service doesn't exist");
 
@@ -297,27 +298,24 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param marketId The id of the market the contract will be created in
      * @param taskMetadataPtr The ipfs hash where the metadata of the contract is stored
      */
-    function createContract(uint256 marketId, string calldata taskMetadataPtr) external onlyContractEmployer returns(uint) {
-        NetworkInterface.Relationship memory relationshipData = NetworkInterface.Relationship({
-                employer: msg.sender,
-                worker: address(0),
-                taskMetadataPtr: taskMetadataPtr,
-                contractOwnership: NetworkInterface.ContractOwnership
-                    .Unclaimed,
-                wad: 0,
-                acceptanceTimestamp: 0,
-                resolutionTimestamp: 0,
-                solutionMetadataPtr: "",
-                marketId: marketId
-        });
+    function createContract(uint256 marketId, string calldata taskMetadataPtr) external returns(uint) {
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[relationships.length];
+        relationship.employer = msg.sender;
+        relationship.worker = address(0);
+        relationship.taskMetadataPtr = taskMetadataPtr;
+        relationship.wad = 0;
+        relationship.acceptanceTimestamp = 0;
+        relationship.resolutionTimestamp = 0;
+        relationship.marketId = marketId;
 
+        relationships.push(relationship);
         uint256 relationshipID = relationships.length - 1;
-        relationships.push(relationshipData);
-        relationshipIDToRelationship[relationshipID] = relationshipData;
+        relationshipIDToRelationship[relationshipID] = relationship;
         relationshipIDToMarketID[relationshipID] = marketId;
 
-        emit ContractCreated();
+        console.log('@@@@: ', relationshipIDToRelationship[relationshipID].employer);
 
+        emit ContractCreated();
         return relationshipID;
     }
 
@@ -328,10 +326,8 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param wad The agreed upon payout for the contract
      * @notice Calling this function will initialize the escrow funds
      */
-    function grantProposalRequest(uint256 contractId, address newWorker, uint256 wad) external onlyWhenOwnership(contractId, NetworkInterface.ContractOwnership.Unclaimed) onlyContractEmployer {
-        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[contractId];
-
-        require(msg.sender == relationship.employer, "Only the employer of this relationship can grant the proposal.");
+    function grantProposalRequest(uint256 contractId, address newWorker, uint256 wad) external onlyWhenOwnership(contractId, NetworkLibrary.ContractOwnership.Unclaimed) onlyContractEmployer(contractId) {
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
         require(newWorker != address(0), "You must grant this proposal to a valid worker.");
         require(relationship.worker == address(0), "This job is already being worked.");
         require(wad != uint256(0),"The payout amount must be greater than 0.");
@@ -339,7 +335,7 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
         relationship.wad = wad;
         relationship.worker = newWorker;
         relationship.acceptanceTimestamp = block.timestamp;
-        relationship.contractOwnership = NetworkInterface.ContractOwnership.Claimed;
+        relationship.contractOwnership = NetworkLibrary.ContractOwnership.Claimed;
 
         _initializeEscrowFundsAndTransfer(contractId);
 
@@ -351,18 +347,16 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param contractId The id of the contract
      * @param solutionMetadataPtr The ipfs hash storing the solution metadata
      */
-    function resolveContract(uint256 contractId, string calldata solutionMetadataPtr) external onlyWhenOwnership(contractId, NetworkInterface.ContractOwnership.Claimed) onlyContractEmployer {
-        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[contractId];
-
-        require(msg.sender == relationship.employer);
-        require(relationship.worker != address(0));
-        require(relationship.wad != uint256(0));
-
-        bytes memory testEmptyString = bytes(relationship.solutionMetadataPtr);
-        require(testEmptyString.length != 0, "Empty solution metadata pointer.");
+    function resolveContract(uint256 contractId, string calldata solutionMetadataPtr) external onlyWhenOwnership(contractId, NetworkLibrary.ContractOwnership.Claimed) onlyContractEmployer(contractId) {
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
+    
+        require(relationship.worker != address(0), "worker cannot be 0.");
+        require(relationship.wad != uint256(0), "wad cannot be 0");
 
         _releaseContractFunds(relationship.wad, contractId);
+        relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
 
+        //emit ContractResolved(contractId, solutionMetadataPtr);
         emit ContractOwnershipUpdate();
     }
 
@@ -370,9 +364,9 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * Allows the employer to release the contract
      * @param contractId The id of the contract
      */
-    function releaseContract(uint256 contractId) external onlyWhenOwnership(contractId, NetworkInterface.ContractOwnership.Claimed) onlyContractWorker()  {
-        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[contractId];
-        require(relationship.contractOwnership == NetworkInterface.ContractOwnership.Claimed);
+    function releaseContract(uint256 contractId) external onlyWhenOwnership(contractId, NetworkLibrary.ContractOwnership.Claimed) onlyContractWorker()  {
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
+        require(relationship.contractOwnership == NetworkLibrary.ContractOwnership.Claimed);
 
         _surrenderFunds(contractId);
         resetRelationshipState(relationship);
@@ -384,11 +378,11 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * Resets the contract state
      * @param contractStruct The contract struct 
      */
-    function resetRelationshipState(NetworkInterface.Relationship storage contractStruct) internal {
+    function resetRelationshipState(NetworkLibrary.Relationship storage contractStruct) internal {
         contractStruct.worker = address(0);
         contractStruct.acceptanceTimestamp = 0;
         contractStruct.wad = 0;
-        contractStruct.contractOwnership = NetworkInterface.ContractOwnership.Unclaimed;
+        contractStruct.contractOwnership = NetworkLibrary.ContractOwnership.Unclaimed;
     }
 
     /**
@@ -396,11 +390,11 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param contractId The id of the contract to update
      * @param newPointerHash The hash of the new pointer
      */
-    function updateTaskMetadataPointer(uint256 contractId, string calldata newPointerHash) external onlyWhenOwnership(contractId, NetworkInterface.ContractOwnership.Unclaimed) {
-        NetworkInterface.Relationship storage relationship = relationshipIDToRelationship[contractId];
+    function updateTaskMetadataPointer(uint256 contractId, string calldata newPointerHash) external onlyWhenOwnership(contractId, NetworkLibrary.ContractOwnership.Unclaimed) {
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
 
         require(msg.sender == relationship.employer);
-        require(relationship.contractOwnership == NetworkInterface.ContractOwnership.Unclaimed);
+        require(relationship.contractOwnership == NetworkLibrary.ContractOwnership.Unclaimed);
 
         relationship.taskMetadataPtr = newPointerHash;
     }
@@ -413,41 +407,41 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param contractId The id of the relationship to begin a disputed state 
      */
     function disputeRelationship(uint256 contractId) external payable {
-        NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[contractId];
+        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
 
-        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
+        NetworkLibrary.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
 
-        if (relationship.contractOwnership != NetworkInterface.ContractOwnership.Claimed) {
-            revert NetworkInterface.InvalidStatus();
+        if (relationship.contractOwnership != NetworkLibrary.ContractOwnership.Claimed) {
+            revert NetworkLibrary.InvalidStatus();
         }
 
         if (msg.sender != relationship.employer) {
-            revert NetworkInterface.NotPayer();
+            revert NetworkLibrary.NotPayer();
         }
 
-        if (escrowDetails.status == NetworkInterface.EscrowStatus.Reclaimed) {
+        if (escrowDetails.status == NetworkLibrary.EscrowStatus.Reclaimed) {
             if (
                 block.timestamp - escrowDetails.reclaimedAt <=
                 arbitrationFeeDepositPeriod
             ) {
-                revert NetworkInterface.PayeeDepositStillPending();
+                revert NetworkLibrary.PayeeDepositStillPending();
             }
 
             _dai.transfer(relationship.worker,relationship.wad + escrowDetails.payerFeeDeposit);
-            escrowDetails.status = NetworkInterface.EscrowStatus.Resolved;
+            escrowDetails.status = NetworkLibrary.EscrowStatus.Resolved;
 
-            relationship.contractOwnership = NetworkInterface.ContractOwnership.Resolved;
+            relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
         } else {
             uint256 requiredAmount = arbitrator.arbitrationCost("");
             if (msg.value < requiredAmount) {
-                revert NetworkInterface.InsufficientPayment(msg.value, requiredAmount);
+                revert NetworkLibrary.InsufficientPayment(msg.value, requiredAmount);
             }
 
             escrowDetails.payerFeeDeposit = msg.value;
             escrowDetails.reclaimedAt = block.timestamp;
-            escrowDetails.status = NetworkInterface.EscrowStatus.Reclaimed;
+            escrowDetails.status = NetworkLibrary.EscrowStatus.Reclaimed;
 
-            relationship.contractOwnership = NetworkInterface.ContractOwnership.Disputed;
+            relationship.contractOwnership = NetworkLibrary.ContractOwnership.Disputed;
         }
     }
 
@@ -460,16 +454,16 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
         external
         payable
     {
-        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
+        NetworkLibrary.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
         //TODO: Require the sender to be the worker of the contract
 
-        if (escrowDetails.status != NetworkInterface.EscrowStatus.Reclaimed) {
-            revert NetworkInterface.InvalidStatus();
+        if (escrowDetails.status != NetworkLibrary.EscrowStatus.Reclaimed) {
+            revert NetworkLibrary.InvalidStatus();
         }
 
         escrowDetails.payeeFeeDeposit = msg.value;
         escrowDetails.disputeID = arbitrator.createDispute{value: msg.value}(numberOfRulingOptions, "");
-        escrowDetails.status = NetworkInterface.EscrowStatus.Disputed;
+        escrowDetails.status = NetworkLibrary.EscrowStatus.Disputed;
         disputeIDtoRelationshipID[escrowDetails.disputeID] = contractId;
         emit Dispute(
             arbitrator,
@@ -487,29 +481,29 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      */
     function rule(uint256 disputeId, uint256 ruling) public override {
         uint256 contractId = disputeIDtoRelationshipID[disputeId];
-        NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[contractId];
-        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
+        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
+        NetworkLibrary.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
 
         if (msg.sender != address(arbitrator)) {
-            revert NetworkInterface.NotArbitrator();
+            revert NetworkLibrary.NotArbitrator();
         }
-        if (escrowDetails.status != NetworkInterface.EscrowStatus.Disputed) {
-            revert NetworkInterface.InvalidStatus();
+        if (escrowDetails.status != NetworkLibrary.EscrowStatus.Disputed) {
+            revert NetworkLibrary.InvalidStatus();
         }
         if (ruling > numberOfRulingOptions) {
-            revert NetworkInterface.InvalidRuling(ruling, numberOfRulingOptions);
+            revert NetworkLibrary.InvalidRuling(ruling, numberOfRulingOptions);
         }
 
-        escrowDetails.status = NetworkInterface.EscrowStatus.Resolved;
+        escrowDetails.status = NetworkLibrary.EscrowStatus.Resolved;
 
-        if (ruling == uint256(NetworkInterface.RulingOptions.PayerWins)) {
+        if (ruling == uint256(NetworkLibrary.RulingOptions.PayerWins)) {
             _dai.transfer(relationship.employer, relationship.wad + escrowDetails.payerFeeDeposit);
         } else {
             _dai.transfer(relationship.worker, relationship.wad + escrowDetails.payeeFeeDeposit);
         }
 
         emit Ruling(arbitrator, disputeId, ruling);
-        relationship.contractOwnership = NetworkInterface.ContractOwnership.Resolved;
+        relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
     }
 
     /**
@@ -519,19 +513,19 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param _evidence A link to some evidence provided for this relationship.
      */
     function submitEvidence(uint256 contractId, string memory _evidence) public {
-         NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[contractId];
-        NetworkInterface.RelationshipEscrowDetails
+         NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
+        NetworkLibrary.RelationshipEscrowDetails
             storage escrowDetails = relationshipIDToEscrowDetails[contractId];
 
-        if (escrowDetails.status != NetworkInterface.EscrowStatus.Disputed) {
-            revert NetworkInterface.InvalidStatus();
+        if (escrowDetails.status != NetworkLibrary.EscrowStatus.Disputed) {
+            revert NetworkLibrary.InvalidStatus();
         }
 
         if (
             msg.sender != relationship.employer &&
             msg.sender != relationship.worker
         ) {
-            revert NetworkInterface.ThirdPartyNotAllowed();
+            revert NetworkLibrary.ThirdPartyNotAllowed();
         }
 
         emit Evidence(
@@ -547,10 +541,10 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param contractId The id of the relationship to return the remaining time.
      */
      function remainingTimeToDepositArbitrationFee(uint256 contractId) external view returns (uint256) {
-        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
+        NetworkLibrary.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
 
-        if (escrowDetails.status != NetworkInterface.EscrowStatus.Reclaimed) {
-            revert NetworkInterface.InvalidStatus();
+        if (escrowDetails.status != NetworkLibrary.EscrowStatus.Reclaimed) {
+            revert NetworkLibrary.InvalidStatus();
         }
 
         return (block.timestamp - escrowDetails.reclaimedAt) > arbitrationFeeDepositPeriod ? 0 : (escrowDetails.reclaimedAt + arbitrationFeeDepositPeriod - block.timestamp);
@@ -563,17 +557,17 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param contractId The ID of the relationship to initialize escrow details
      */
     function _initializeEscrowFundsAndTransfer(uint256 contractId) internal {
-        NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[contractId];
+        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
  
-        relationshipIDToEscrowDetails[contractId] = NetworkInterface.RelationshipEscrowDetails({
-            status: NetworkInterface.EscrowStatus.Initial,
+        relationshipIDToEscrowDetails[contractId] = NetworkLibrary.RelationshipEscrowDetails({
+            status: NetworkLibrary.EscrowStatus.Initial,
             disputeID: contractId,
             createdAt: block.timestamp,
             reclaimedAt: 0,
             payerFeeDeposit: 0,
             payeeFeeDeposit: 0
         });
-
+        
         _dai.transferFrom(relationship.employer, address(this), relationship.wad);
     }
 
@@ -582,8 +576,8 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param contractId The ID of the relationship to surrender the funds.
      */
     function _surrenderFunds(uint256 contractId) internal {
-        NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[contractId];
-        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
+        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
+        NetworkLibrary.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
         require(msg.sender == relationship.worker);
         _dai.transfer(relationship.employer,  relationship.wad);
     }
@@ -594,17 +588,15 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param contractId The ID of the relationship to transfer funds
      */
     function _releaseContractFunds(uint256 _amount, uint256 contractId) internal {
-        NetworkInterface.Relationship memory relationship = relationshipIDToRelationship[contractId];
-        NetworkInterface.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
-            
+        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
+        NetworkLibrary.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
         require(msg.sender == relationship.employer, "only employer");
-
-        escrowDetails.status = NetworkInterface.EscrowStatus.Resolved;
-
-        uint256 fee = _amount * OPPORTUNITY_WITHDRAWAL_FEE;
+        
+        escrowDetails.status = NetworkLibrary.EscrowStatus.Resolved;
+        uint256 fee = _amount / _protocolFee;
         uint256 payout = _amount - fee;
         _dai.transfer(relationship.worker, payout);
-        relationship.wad = 0;
+        _dai.transfer(treasury, fee);
     }
 
     ///////////////////////////////////////////// Setters
@@ -643,8 +635,12 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * Returns the list of registered services
      * @return All registered services
      */
-    function getServices() public view returns(NetworkInterface.Service[] memory) {
+    function getServices() public view returns(NetworkLibrary.Service[] memory) {
         return services;
+    }
+
+    function getContracts() public view returns(NetworkLibrary.Relationship[] memory) {
+        return relationships;
     }
 
     /**
@@ -652,7 +648,7 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param serviceId The id of the service
      * @return Service The service to return
      */
-    function getServiceData(uint256 serviceId) public view returns(NetworkInterface.Service memory) {
+    function getServiceData(uint256 serviceId) public view returns(NetworkLibrary.Service memory) {
         return serviceIdToService[serviceId];
     }
 
@@ -661,7 +657,7 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param contractId The id of the contract
      * @return Contract The contract to return
      */
-    function getContractData(uint256 contractId) external returns (NetworkInterface.Relationship memory) {
+    function getContractData(uint256 contractId) public view returns (NetworkLibrary.Relationship memory) {
         return relationshipIDToRelationship[contractId];
     }
 
@@ -674,7 +670,7 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
         return serviceIdToWaitlist[serviceId].length();
     }
 
-    function getProtocolFee() external view returns(uint) {
+    function getProtocolFee() external view onlyOwner returns(uint) {
         return _protocolFee;
     }
 }
