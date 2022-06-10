@@ -107,13 +107,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         address interestManager,
         address dai
     ) external virtual initializer {
-        require(
-            authorizer != address(0) &&
-                tradingFeeRecipient != address(0) &&
-                interestManager != address(0) &&
-                dai != address(0),
-            'invalid-params'
-        );
+        require(authorizer != address(0) && tradingFeeRecipient != address(0) && interestManager != address(0) && dai != address(0), 'invalid-params');
 
         setOwnerInternal(owner); // Checks owner to be non-zero
         _authorizer = authorizer;
@@ -153,11 +147,9 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
 
         IServiceToken(serviceToken).burn(msg.sender, amount);
 
-        _interestManager.accrueInterest();
-
         ExchangeInfo storage exchangeInfo;
         if (marketDetails.allInterestToPlatform) {
-            exchangeInfo = _platformsExchangeInfo[marketID]; //revisit
+            exchangeInfo = _platformsExchangeInfo[marketID];
         } else {
             exchangeInfo = _tokensExchangeInfo[serviceToken];
         }
@@ -365,9 +357,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
             'dai-transfer'
         );
 
-        _interestManager.accrueInterest();
         _interestManager.invest(amounts.total);
-        console.log('Amounts: ', amounts.total);
 
         ExchangeInfo storage exchangeInfo;
         if (marketDetails.allInterestToPlatform) {
@@ -524,7 +514,6 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      */
     function withdrawTokenInterest(address token) external virtual override {
         require(_tokenOwner[token] == msg.sender, 'not-authorized');
-        _interestManager.accrueInterest();
 
         uint256 interestPayable = getInterestPayable(token);
         if (interestPayable == 0) {
@@ -584,7 +573,6 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         address sender = msg.sender;
 
         require(_platformOwner[marketID] == sender, 'not-authorized');
-        _interestManager.accrueInterest();
 
         uint256 platformInterestPayable = getPlatformInterestPayable(marketID);
         if (platformInterestPayable == 0) {
@@ -629,7 +617,6 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         address sender = msg.sender;
 
         require(_platformOwner[marketID] == sender, 'not-authorized');
-        _interestManager.accrueInterest();
 
         uint256 platformFeePayable = getPlatformFeePayable(marketID);
         if (platformFeePayable == 0) {
@@ -689,7 +676,6 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
             return;
         }
 
-        _interestManager.accrueInterest();
 
         _tradingFeeInvested = 0;
         uint256 redeem = _interestManager.investmentTokenToUnderlying(invested);

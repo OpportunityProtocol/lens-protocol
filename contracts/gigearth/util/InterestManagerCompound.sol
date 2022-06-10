@@ -61,10 +61,10 @@ contract InterestManagerCompound is Ownable, Initializable {
      * @return The amount of minted cDai
      */
     function invest(uint amount) external virtual onlyOwner returns (uint) {
-        uint balanceBefore = _cDai.balanceOf(address(this));
-        require(_dai.balanceOf(address(this)) >= amount, "insufficient-dai");
-        require(_dai.approve(address(_cDai), amount), "dai-cdai-approve");
-        require(_cDai.mint(amount) == 0, "cdai-mint");
+        uint balanceBefore = _cDai.balanceOf(address(this)); //get cDai balance of the interest manager
+        require(_dai.balanceOf(address(this)) >= amount, "insufficient-dai"); //make sure the interest manager has enough dai to invest
+        require(_dai.approve(address(_cDai), amount), "dai-cdai-approve"); //approve that cDai can withdraw the appropriate amount
+        require(_cDai.mint(amount) == 0, "cdai-mint"); //interest manager send dai and receives cDAI.. it owns the cDAI.
         uint balanceAfter = _cDai.balanceOf(address(this));
         return balanceAfter.sub(balanceBefore);
     }
@@ -78,11 +78,11 @@ contract InterestManagerCompound is Ownable, Initializable {
      * @return The amount of burned cDai
      */
     function redeem(address recipient, uint amount) external virtual onlyOwner returns (uint) {
-        uint balanceBefore = _cDai.balanceOf(address(this));
-        require(_cDai.redeemUnderlying(amount) == 0, "redeem");
-        uint balanceAfter = _cDai.balanceOf(address(this));
-        require(_dai.transfer(recipient, amount), "dai-transfer");
-        return balanceBefore.sub(balanceAfter);
+        uint balanceBefore = _cDai.balanceOf(address(this)); //get cdai balance of the interest manager
+        require(_cDai.redeemUnderlying(amount) == 0, "redeem"); //redeem dai from compound and store in interest manager
+        uint balanceAfter = _cDai.balanceOf(address(this)); //get balance of cdai of interest manaer
+        require(_dai.transfer(recipient, amount), "dai-transfer"); //send cDai of interest manager to token exchange
+        return balanceBefore.sub(balanceAfter); //return the balance
     }
 
     /**
