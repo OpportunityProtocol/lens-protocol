@@ -1,4 +1,4 @@
-library NetworkInterface {
+library NetworkLibrary {
     error InvalidStatus();
     error ReleasedTooEarly();
     error NotPayer();
@@ -17,8 +17,6 @@ library NetworkInterface {
         uint256 wad;
         uint256 acceptanceTimestamp;
         uint256 resolutionTimestamp;
-        uint256 satisfactoryScore;
-        string solutionMetadataPtr;
         uint256 marketId;
     }
 
@@ -79,11 +77,10 @@ library NetworkInterface {
      */
     enum ContractOwnership {
         Unclaimed,
-        Pending,
         Claimed,
-        Disputed,
         Resolved,
-        Reclaimed
+        Reclaimed,
+        Disputed
     }
 
     /**

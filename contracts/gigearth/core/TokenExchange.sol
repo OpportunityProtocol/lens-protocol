@@ -2,16 +2,18 @@
 pragma solidity ^0.8.7;
 pragma experimental ABIEncoderV2;
 
-import "./Ownable.sol";
-import "./Initializable.sol";
+import '../util/Ownable.sol';
+import '../util/Initializable.sol';
 
-import "../interface/ITokenExchange.sol";
-import "../interface/IServiceToken.sol";
-import "../interface/ITokenFactory.sol";
-import "../interface/IInterestManager.sol";
+import '../interface/ITokenExchange.sol';
+import '../interface/IServiceToken.sol';
+import '../interface/ITokenFactory.sol';
+import '../interface/IInterestManager.sol';
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import '@openzeppelin/contracts/utils/math/SafeMath.sol';
+
+import 'hardhat/console.sol';
 
 /**
  * @title TokenExchange (Originally: IdeaTokenExchange)
@@ -26,36 +28,35 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
     // Keeps track of the amount of invested dai in this token, and the amount of investment tokens (e.g. cDai).
     struct ExchangeInfo {
         // The amount of Dai collected by trading
-        uint dai;
+        uint256 dai;
         // The amount of "investment tokens", e.g. cDai
-        uint invested; 
+        uint256 invested;
         // The id of the specific token invested
         uint256 id;
     }
 
-    uint constant FEE_SCALE = 10000;
+    uint256 constant FEE_SCALE = 10000;
 
     // The address authorized to set token and platform owners.
     // It is only allowed to change these when the current owner is not set (zero address).
     // Using such an address allows an external program to make authorization calls without having to go through the timelock.
     address _authorizer;
 
-    // The amount of "investment tokens" for the collected trading fee, e.g. cDai 
-    uint _tradingFeeInvested; 
+    // The amount of "investment tokens" for the collected trading fee, e.g. cDai
+    uint256 _tradingFeeInvested;
     // The address which receives the trading fee when withdrawTradingFee is called
     address _tradingFeeRecipient;
 
     // marketID => owner. The owner of a platform.
     // This address is allowed to withdraw platform fee.
     // When allInterestToPlatform=true then this address can also withdraw the platform interest
-    mapping(uint => address) _platformOwner;
+    mapping(uint256 => address) _platformOwner;
 
     // marketID => amount. The amount of "investment tokens" for the collected platform fee, e.g. cDai
-    mapping(uint => uint) _platformFeeInvested;
-    
+    mapping(uint256 => uint256) _platformFeeInvested;
 
     // marketID => ExchangeInfo. Stores ExchangeInfo structs for platforms
-    mapping(uint => ExchangeInfo) _platformsExchangeInfo;
+    mapping(uint256 => ExchangeInfo) _platformsExchangeInfo;
 
     // ServiceToken address => owner. The owner of an ServiceToken.
     // This address is allowed to withdraw the interest for an ServiceToken
@@ -74,15 +75,23 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
     mapping(address => bool) _tokenFeeKillswitch;
 
     event NewTokenOwner(address serviceToken, address owner);
-    event NewPlatformOwner(uint marketID, address owner);
+    event NewPlatformOwner(uint256 marketID, address owner);
 
-    event InvestedState(uint marketID, address serviceToken, uint dai, uint daiInvested, uint tradingFeeInvested, uint platformFeeInvested, uint volume);
-    
-    event PlatformInterestRedeemed(uint marketID, uint investmentToken, uint daiRedeemed);
-    event TokenInterestRedeemed(address serviceToken, uint investmentToken, uint daiRedeemed);
-    event TradingFeeRedeemed(uint daiRedeemed);
-    event PlatformFeeRedeemed(uint marketID, uint daiRedeemed);
-    
+    event InvestedState(
+        uint256 marketID,
+        address serviceToken,
+        uint256 dai,
+        uint256 daiInvested,
+        uint256 tradingFeeInvested,
+        uint256 platformFeeInvested,
+        uint256 volume
+    );
+
+    event PlatformInterestRedeemed(uint256 marketID, uint256 investmentToken, uint256 daiRedeemed);
+    event TokenInterestRedeemed(address serviceToken, uint256 investmentToken, uint256 daiRedeemed);
+    event TradingFeeRedeemed(uint256 daiRedeemed);
+    event PlatformFeeRedeemed(uint256 marketID, uint256 daiRedeemed);
+
     /**
      * Initializes the contract
      *
@@ -91,16 +100,14 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      * @param interestManager The address of the InterestManager
      * @param dai The address of Dai
      */
-    function initialize(address owner,
-                        address authorizer,
-                        address tradingFeeRecipient,
-                        address interestManager,
-                        address dai) external virtual initializer {
-        require(authorizer != address(0) &&
-                tradingFeeRecipient != address(0) &&
-                interestManager != address(0) &&
-                dai != address(0),
-                "invalid-params");
+    function initialize(
+        address owner,
+        address authorizer,
+        address tradingFeeRecipient,
+        address interestManager,
+        address dai
+    ) external virtual initializer {
+        require(authorizer != address(0) && tradingFeeRecipient != address(0) && interestManager != address(0) && dai != address(0), 'invalid-params');
 
         setOwnerInternal(owner); // Checks owner to be non-zero
         _authorizer = authorizer;
@@ -117,51 +124,72 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      * @param minPrice The minimum allowed price in Dai for selling `amount` ServiceTokens
      * @param recipient The recipient of the redeemed Dai
      */
-    function sellTokens(address serviceToken, uint amount, uint minPrice, address recipient) external virtual override {
+    function sellTokens(
+        address serviceToken,
+        uint256 amount,
+        uint256 minPrice,
+        address recipient
+    ) external virtual override {
+        uint256 marketID = _tokenFactory.getMarketIDByTokenAddress(serviceToken);
+        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID((marketID));
 
-        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
-        require(marketDetails.exists, "token-not-exist");
-        uint marketID = marketDetails.id;
+        require(marketDetails.exists, 'token-not-exist');
 
-        CostAndPriceAmounts memory amounts = getPricesForSellingTokens(marketDetails, IERC20(serviceToken).totalSupply(), amount, _tokenFeeKillswitch[serviceToken]);
+        CostAndPriceAmounts memory amounts = getPricesForSellingTokens(
+            marketDetails,
+            IERC20(serviceToken).totalSupply(),
+            amount,
+            _tokenFeeKillswitch[serviceToken]
+        );
 
-        require(amounts.total >= minPrice, "below-min-price");
-        require(IServiceToken(serviceToken).balanceOf(msg.sender) >= amount, "insufficient-tokens");
-        
+        require(amounts.total >= minPrice, 'below-min-price');
+        require(IServiceToken(serviceToken).balanceOf(msg.sender) >= amount, 'insufficient-tokens');
+
         IServiceToken(serviceToken).burn(msg.sender, amount);
 
-        _interestManager.accrueInterest();
-
         ExchangeInfo storage exchangeInfo;
-        if(marketDetails.allInterestToPlatform) {
-            exchangeInfo = _platformsExchangeInfo[marketID]; //revisit
+        if (marketDetails.allInterestToPlatform) {
+            exchangeInfo = _platformsExchangeInfo[marketID];
         } else {
             exchangeInfo = _tokensExchangeInfo[serviceToken];
         }
 
-        uint tradingFeeInvested;
-        uint platformFeeInvested;
-        uint invested;
-        uint dai;
+        uint256 tradingFeeInvested;
+        uint256 platformFeeInvested;
+        uint256 invested;
+        uint256 dai;
         {
-        uint totalRedeemed = _interestManager.redeem(address(this), amounts.total);
-        uint tradingFeeRedeemed = _interestManager.underlyingToInvestmentToken(amounts.tradingFee);
-        uint platformFeeRedeemed = _interestManager.underlyingToInvestmentToken(amounts.platformFee);
+            uint256 totalRedeemed = _interestManager.redeem(address(this), amounts.total);
+            uint256 tradingFeeRedeemed = _interestManager.underlyingToInvestmentToken(
+                amounts.tradingFee
+            );
+            uint256 platformFeeRedeemed = _interestManager.underlyingToInvestmentToken(
+                amounts.platformFee
+            );
 
-        invested = exchangeInfo.invested.sub(totalRedeemed.add(tradingFeeRedeemed).add(platformFeeRedeemed));
-        exchangeInfo.invested = invested;
-        tradingFeeInvested = _tradingFeeInvested.add(tradingFeeRedeemed);
-        _tradingFeeInvested = tradingFeeInvested;
-        platformFeeInvested = _platformFeeInvested[marketID].add(platformFeeRedeemed);
-        _platformFeeInvested[marketID] = platformFeeInvested;
-        dai = exchangeInfo.dai.sub(amounts.raw);
-        exchangeInfo.dai = dai;
+            invested = exchangeInfo.invested.sub(
+                totalRedeemed.add(tradingFeeRedeemed).add(platformFeeRedeemed)
+            );
+            exchangeInfo.invested = invested;
+            tradingFeeInvested = _tradingFeeInvested.add(tradingFeeRedeemed);
+            _tradingFeeInvested = tradingFeeInvested;
+            platformFeeInvested = _platformFeeInvested[marketID].add(platformFeeRedeemed);
+            _platformFeeInvested[marketID] = platformFeeInvested;
+            dai = exchangeInfo.dai.sub(amounts.raw);
+            exchangeInfo.dai = dai;
         }
 
-        emit InvestedState(marketID, serviceToken, dai, invested, tradingFeeInvested, platformFeeInvested, amounts.raw);
-        require(_dai.transfer(recipient, amounts.total), "dai-transfer");
+        emit InvestedState(
+            marketID,
+            serviceToken,
+            dai,
+            invested,
+            tradingFeeInvested,
+            platformFeeInvested,
+            amounts.raw
+        );
+        require(_dai.transfer(recipient, amounts.total), 'dai-transfer');
     }
-
 
     /**
      * Returns the price for selling ServiceTokens
@@ -171,9 +199,23 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return The price in Dai for selling `amount` ServiceTokens
      */
-    function getPriceForSellingTokens(address serviceToken, uint amount) external virtual view override returns (uint) {
-        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
-        return getPricesForSellingTokens(marketDetails, IERC20(serviceToken).totalSupply(), amount, _tokenFeeKillswitch[serviceToken]).total;
+    function getPriceForSellingTokens(address serviceToken, uint256 amount)
+        external
+        view
+        virtual
+        override
+        returns (uint256)
+    {
+        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(
+            serviceToken
+        );
+        return
+            getPricesForSellingTokens(
+                marketDetails,
+                IERC20(serviceToken).totalSupply(),
+                amount,
+                _tokenFeeKillswitch[serviceToken]
+            ).total;
     }
 
     /**
@@ -185,30 +227,37 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return total cost, raw cost and trading fee
      */
-    function getPricesForSellingTokens(MarketDetails memory marketDetails, uint supply, uint amount, bool feesDisabled) public virtual pure override returns (CostAndPriceAmounts memory) {
-        
-        uint rawPrice = getRawPriceForSellingTokens(marketDetails.baseCost,
-                                                    marketDetails.priceRise,
-                                                    marketDetails.hatchTokens,
-                                                    supply,
-                                                    amount);
+    function getPricesForSellingTokens(
+        MarketDetails memory marketDetails,
+        uint256 supply,
+        uint256 amount,
+        bool feesDisabled
+    ) public pure virtual override returns (CostAndPriceAmounts memory) {
+        uint256 rawPrice = getRawPriceForSellingTokens(
+            marketDetails.baseCost,
+            marketDetails.priceRise,
+            marketDetails.hatchTokens,
+            supply,
+            amount
+        );
 
-        uint tradingFee = 0;
-        uint platformFee = 0;
+        uint256 tradingFee = 0;
+        uint256 platformFee = 0;
 
-        if(!feesDisabled) {
+        if (!feesDisabled) {
             tradingFee = rawPrice.mul(marketDetails.tradingFeeRate).div(FEE_SCALE);
             platformFee = rawPrice.mul(marketDetails.platformFeeRate).div(FEE_SCALE);
-        }   
-        
-        uint totalPrice = rawPrice.sub(tradingFee).sub(platformFee);
+        }
 
-        return CostAndPriceAmounts({
-            total: totalPrice,
-            raw: rawPrice,
-            tradingFee: tradingFee,
-            platformFee: platformFee
-        });
+        uint256 totalPrice = rawPrice.sub(tradingFee).sub(platformFee);
+
+        return
+            CostAndPriceAmounts({
+                total: totalPrice,
+                raw: rawPrice,
+                tradingFee: tradingFee,
+                platformFee: platformFee
+            });
     }
 
     /**
@@ -222,20 +271,24 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return The price selling `amount` ServiceTokens without any fees applied
      */
-    function getRawPriceForSellingTokens(uint baseCost, uint priceRise, uint hatchTokens, uint supply, uint amount) internal virtual pure returns (uint) {
+    function getRawPriceForSellingTokens(
+        uint256 baseCost,
+        uint256 priceRise,
+        uint256 hatchTokens,
+        uint256 supply,
+        uint256 amount
+    ) internal pure virtual returns (uint256) {
+        uint256 hatchPrice = 0;
+        uint256 updatedAmount = amount;
+        uint256 updatedSupply;
 
-        uint hatchPrice = 0;
-        uint updatedAmount = amount;
-        uint updatedSupply;
-
-        if(supply.sub(amount) < hatchTokens) {
-
-            if(supply <= hatchTokens) {
+        if (supply.sub(amount) < hatchTokens) {
+            if (supply <= hatchTokens) {
                 return baseCost.mul(amount).div(10**18);
             }
 
             // No SafeMath required because supply - amount < hatchTokens
-            uint tokensInHatch = hatchTokens - (supply - amount);
+            uint256 tokensInHatch = hatchTokens - (supply - amount);
             hatchPrice = baseCost.mul(tokensInHatch).div(10**18);
             updatedAmount = amount.sub(tokensInHatch);
             // No SafeMath required because supply >= hatchTokens
@@ -245,10 +298,12 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
             updatedSupply = supply - hatchTokens;
         }
 
-        uint priceAtSupply = baseCost.add(priceRise.mul(updatedSupply).div(10**18));
-        uint priceAtSupplyMinusAmount = baseCost.add(priceRise.mul(updatedSupply.sub(updatedAmount)).div(10**18));
-        uint average = priceAtSupply.add(priceAtSupplyMinusAmount).div(2);
-    
+        uint256 priceAtSupply = baseCost.add(priceRise.mul(updatedSupply).div(10**18));
+        uint256 priceAtSupplyMinusAmount = baseCost.add(
+            priceRise.mul(updatedSupply.sub(updatedAmount)).div(10**18)
+        );
+        uint256 average = priceAtSupply.add(priceAtSupplyMinusAmount).div(2);
+
         return hatchPrice.add(average.mul(updatedAmount).div(10**18));
     }
 
@@ -261,48 +316,79 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      * @param cost The maximum allowed cost in Dai
      * @param recipient The recipient of the bought ServiceTokens
      */
-    function buyTokens(address serviceToken, uint amount, uint fallbackAmount, uint cost, address recipient) external virtual override {
-        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
-        require(marketDetails.exists, "token-not-exist");
-        uint marketID = marketDetails.id;
+    function buyTokens(
+        address serviceToken,
+        uint256 amount,
+        uint256 fallbackAmount,
+        uint256 cost,
+        address recipient
+    ) external virtual override {
+        uint256 marketID = _tokenFactory.getMarketIDByTokenAddress(serviceToken);
+        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID((marketID));
 
-        uint supply = IERC20(serviceToken).totalSupply();
+        console.log('The market name: ', marketDetails.name);
+        console.log('Exists: ', marketDetails.exists);
+        require(marketDetails.exists, 'token-not-exist');
+
+        uint256 supply = IERC20(serviceToken).totalSupply();
         bool feesDisabled = _tokenFeeKillswitch[serviceToken];
-        uint actualAmount = amount;
+        uint256 actualAmount = amount;
 
-        CostAndPriceAmounts memory amounts = getCostsForBuyingTokens(marketDetails, supply, actualAmount, feesDisabled);
+        CostAndPriceAmounts memory amounts = getCostsForBuyingTokens(
+            marketDetails,
+            supply,
+            actualAmount,
+            feesDisabled
+        );
 
-        if(amounts.total > cost) {
+        if (amounts.total > cost) {
             actualAmount = fallbackAmount;
             amounts = getCostsForBuyingTokens(marketDetails, supply, actualAmount, feesDisabled);
-    
-            require(amounts.total <= cost, "slippage");
+
+            require(amounts.total <= cost, 'slippage');
         }
 
-        
-        require(_dai.allowance(msg.sender, address(this)) >= amounts.total, "insufficient-allowance");
-        require(_dai.transferFrom(msg.sender, address(_interestManager), amounts.total), "dai-transfer");
-        
-        _interestManager.accrueInterest();
+        require(
+            _dai.allowance(msg.sender, address(this)) >= amounts.total,
+            'insufficient-allowance'
+        );
+        require(
+            _dai.transferFrom(msg.sender, address(_interestManager), amounts.total),
+            'dai-transfer'
+        );
+
         _interestManager.invest(amounts.total);
 
-
         ExchangeInfo storage exchangeInfo;
-        if(marketDetails.allInterestToPlatform) {
+        if (marketDetails.allInterestToPlatform) {
             exchangeInfo = _platformsExchangeInfo[marketID];
         } else {
             exchangeInfo = _tokensExchangeInfo[serviceToken];
         }
 
-        exchangeInfo.invested = exchangeInfo.invested.add(_interestManager.underlyingToInvestmentToken(amounts.raw));
-        uint tradingFeeInvested = _tradingFeeInvested.add(_interestManager.underlyingToInvestmentToken(amounts.tradingFee));
+        exchangeInfo.invested = exchangeInfo.invested.add(
+            _interestManager.underlyingToInvestmentToken(amounts.raw)
+        );
+        uint256 tradingFeeInvested = _tradingFeeInvested.add(
+            _interestManager.underlyingToInvestmentToken(amounts.tradingFee)
+        );
         _tradingFeeInvested = tradingFeeInvested;
-        uint platformFeeInvested = _platformFeeInvested[marketID].add(_interestManager.underlyingToInvestmentToken(amounts.platformFee));
+        uint256 platformFeeInvested = _platformFeeInvested[marketID].add(
+            _interestManager.underlyingToInvestmentToken(amounts.platformFee)
+        );
         _platformFeeInvested[marketID] = platformFeeInvested;
         exchangeInfo.dai = exchangeInfo.dai.add(amounts.raw);
-    
-        emit InvestedState(marketID, serviceToken, exchangeInfo.dai, exchangeInfo.invested, tradingFeeInvested, platformFeeInvested, amounts.total);
-        IServiceToken(serviceToken).mint(recipient,  actualAmount);
+
+        emit InvestedState(
+            marketID,
+            serviceToken,
+            exchangeInfo.dai,
+            exchangeInfo.invested,
+            tradingFeeInvested,
+            platformFeeInvested,
+            amounts.total
+        );
+        IServiceToken(serviceToken).mint(recipient, actualAmount);
     }
 
     /**
@@ -313,10 +399,22 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return The cost in Dai for buying `amount` ServiceTokens
      */
-    function getCostForBuyingTokens(address serviceToken, uint amount) external virtual view override returns (uint) {
-        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(serviceToken);
-
-        return getCostsForBuyingTokens(marketDetails, IERC20(serviceToken).totalSupply(), amount, _tokenFeeKillswitch[serviceToken]).total;
+    function getCostForBuyingTokens(address serviceToken, uint256 amount)
+        external
+        view
+        virtual
+        override
+        returns (uint256)
+    {
+        uint256 marketID = _tokenFactory.getMarketIDByTokenAddress(serviceToken);
+        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID(marketID);
+        return
+            getCostsForBuyingTokens(
+                marketDetails,
+                IERC20(serviceToken).totalSupply(),
+                amount,
+                _tokenFeeKillswitch[serviceToken]
+            ).total;
     }
 
     /**
@@ -328,29 +426,37 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return total cost, raw cost, trading fee, platform fee
      */
-    function getCostsForBuyingTokens(MarketDetails memory marketDetails, uint supply, uint amount, bool feesDisabled) public virtual pure override returns (CostAndPriceAmounts memory) {
-        uint rawCost = getRawCostForBuyingTokens(marketDetails.baseCost,
-                                                 marketDetails.priceRise,
-                                                 marketDetails.hatchTokens,
-                                                 supply,
-                                                 amount);
+    function getCostsForBuyingTokens(
+        MarketDetails memory marketDetails,
+        uint256 supply,
+        uint256 amount,
+        bool feesDisabled
+    ) public pure virtual override returns (CostAndPriceAmounts memory) {
+        uint256 rawCost = getRawCostForBuyingTokens(
+            marketDetails.baseCost,
+            marketDetails.priceRise,
+            marketDetails.hatchTokens,
+            supply,
+            amount
+        );
 
-        uint tradingFee = 0;
-        uint platformFee = 0;
+        uint256 tradingFee = 0;
+        uint256 platformFee = 0;
 
-        if(!feesDisabled) {
+        if (!feesDisabled) {
             tradingFee = rawCost.mul(marketDetails.tradingFeeRate).div(FEE_SCALE);
             platformFee = rawCost.mul(marketDetails.platformFeeRate).div(FEE_SCALE);
         }
-        
-        uint totalCost = rawCost.add(tradingFee).add(platformFee);
 
-        return CostAndPriceAmounts({
-            total: totalCost,
-            raw: rawCost,
-            tradingFee: tradingFee,
-            platformFee: platformFee
-        });
+        uint256 totalCost = rawCost.add(tradingFee).add(platformFee);
+
+        return
+            CostAndPriceAmounts({
+                total: totalCost,
+                raw: rawCost,
+                tradingFee: tradingFee,
+                platformFee: platformFee
+            });
     }
 
     /**
@@ -364,17 +470,22 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return The cost buying `amount` ServiceTokens without any fees applied
      */
-    function getRawCostForBuyingTokens(uint baseCost, uint priceRise, uint hatchTokens, uint supply, uint amount) internal virtual pure returns (uint) {
+    function getRawCostForBuyingTokens(
+        uint256 baseCost,
+        uint256 priceRise,
+        uint256 hatchTokens,
+        uint256 supply,
+        uint256 amount
+    ) internal pure virtual returns (uint256) {
+        uint256 hatchCost = 0;
+        uint256 updatedAmount = amount;
+        uint256 updatedSupply;
 
-        uint hatchCost = 0;
-        uint updatedAmount = amount;
-        uint updatedSupply;
-
-        if(supply < hatchTokens) {
+        if (supply < hatchTokens) {
             // No SafeMath required because supply < hatchTokens
-            uint remainingHatchTokens = hatchTokens - supply;
+            uint256 remainingHatchTokens = hatchTokens - supply;
 
-            if(amount <= remainingHatchTokens) {
+            if (amount <= remainingHatchTokens) {
                 return baseCost.mul(amount).div(10**18);
             }
 
@@ -387,9 +498,11 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
             updatedSupply = supply - hatchTokens;
         }
 
-        uint priceAtSupply = baseCost.add(priceRise.mul(updatedSupply).div(10**18));
-        uint priceAtSupplyPlusAmount = baseCost.add(priceRise.mul(updatedSupply.add(updatedAmount)).div(10**18));
-        uint average = priceAtSupply.add(priceAtSupplyPlusAmount).div(2);
+        uint256 priceAtSupply = baseCost.add(priceRise.mul(updatedSupply).div(10**18));
+        uint256 priceAtSupplyPlusAmount = baseCost.add(
+            priceRise.mul(updatedSupply.add(updatedAmount)).div(10**18)
+        );
+        uint256 average = priceAtSupply.add(priceAtSupplyPlusAmount).div(2);
 
         return hatchCost.add(average.mul(updatedAmount).div(10**18));
     }
@@ -400,16 +513,17 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      * @param token The token from which the generated interest is to be withdrawn
      */
     function withdrawTokenInterest(address token) external virtual override {
-        require(_tokenOwner[token] == msg.sender, "not-authorized");
-        _interestManager.accrueInterest();
+        require(_tokenOwner[token] == msg.sender, 'not-authorized');
 
-        uint interestPayable = getInterestPayable(token);
-        if(interestPayable == 0) {
+        uint256 interestPayable = getInterestPayable(token);
+        if (interestPayable == 0) {
             return;
         }
 
         ExchangeInfo storage exchangeInfo = _tokensExchangeInfo[token];
-        exchangeInfo.invested = exchangeInfo.invested.sub(_interestManager.redeem(msg.sender, interestPayable));
+        exchangeInfo.invested = exchangeInfo.invested.sub(
+            _interestManager.redeem(msg.sender, interestPayable)
+        );
 
         emit TokenInterestRedeemed(token, exchangeInfo.invested, interestPayable);
     }
@@ -421,9 +535,12 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return The interest available to be paid out
      */
-    function getInterestPayable(address token) public virtual view override returns (uint) {
+    function getInterestPayable(address token) public view virtual override returns (uint256) {
         ExchangeInfo storage exchangeInfo = _tokensExchangeInfo[token];
-        return _interestManager.investmentTokenToUnderlying(exchangeInfo.invested).sub(exchangeInfo.dai);
+        return
+            _interestManager.investmentTokenToUnderlying(exchangeInfo.invested).sub(
+                exchangeInfo.dai
+            );
     }
 
     /**
@@ -436,9 +553,11 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         address sender = msg.sender;
         address current = _tokenOwner[token];
 
-        require((current == address(0) && (sender == _owner || sender == _authorizer)) ||
+        require(
+            (current == address(0) && (sender == _owner || sender == _authorizer)) ||
                 (current != address(0) && (sender == _owner || sender == current)),
-                "not-authorized");
+            'not-authorized'
+        );
 
         _tokenOwner[token] = owner;
 
@@ -450,19 +569,20 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @param marketID The market id from which the generated interest is to be withdrawn
      */
-    function withdrawPlatformInterest(uint marketID) external virtual override {
+    function withdrawPlatformInterest(uint256 marketID) external virtual override {
         address sender = msg.sender;
 
-        require(_platformOwner[marketID] == sender, "not-authorized");
-        _interestManager.accrueInterest();
+        require(_platformOwner[marketID] == sender, 'not-authorized');
 
-        uint platformInterestPayable = getPlatformInterestPayable(marketID);
-        if(platformInterestPayable == 0) {
+        uint256 platformInterestPayable = getPlatformInterestPayable(marketID);
+        if (platformInterestPayable == 0) {
             return;
         }
 
         ExchangeInfo storage exchangeInfo = _platformsExchangeInfo[marketID];
-        exchangeInfo.invested = exchangeInfo.invested.sub(_interestManager.redeem(sender, platformInterestPayable));
+        exchangeInfo.invested = exchangeInfo.invested.sub(
+            _interestManager.redeem(sender, platformInterestPayable)
+        );
 
         emit PlatformInterestRedeemed(marketID, exchangeInfo.invested, platformInterestPayable);
     }
@@ -474,9 +594,18 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return The interest available to be paid out
      */
-    function getPlatformInterestPayable(uint marketID) public virtual view override returns (uint) {
+    function getPlatformInterestPayable(uint256 marketID)
+        public
+        view
+        virtual
+        override
+        returns (uint256)
+    {
         ExchangeInfo storage exchangeInfo = _platformsExchangeInfo[marketID];
-        return _interestManager.investmentTokenToUnderlying(exchangeInfo.invested).sub(exchangeInfo.dai);
+        return
+            _interestManager.investmentTokenToUnderlying(exchangeInfo.invested).sub(
+                exchangeInfo.dai
+            );
     }
 
     /**
@@ -484,14 +613,13 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @param marketID The market from which the generated platform fee is to be withdrawn
      */
-    function withdrawPlatformFee(uint marketID) external virtual override {
+    function withdrawPlatformFee(uint256 marketID) external virtual override {
         address sender = msg.sender;
-    
-        require(_platformOwner[marketID] == sender, "not-authorized");
-        _interestManager.accrueInterest();
 
-        uint platformFeePayable = getPlatformFeePayable(marketID);
-        if(platformFeePayable == 0) {
+        require(_platformOwner[marketID] == sender, 'not-authorized');
+
+        uint256 platformFeePayable = getPlatformFeePayable(marketID);
+        if (platformFeePayable == 0) {
             return;
         }
 
@@ -508,7 +636,13 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return The platform fee available to be paid out
      */
-    function getPlatformFeePayable(uint marketID) public virtual view override returns (uint) {
+    function getPlatformFeePayable(uint256 marketID)
+        public
+        view
+        virtual
+        override
+        returns (uint256)
+    {
         return _interestManager.investmentTokenToUnderlying(_platformFeeInvested[marketID]);
     }
 
@@ -518,14 +652,16 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      * @param marketID The market for which to authorize an address
      * @param owner The address to be authorized
      */
-    function setPlatformOwner(uint marketID, address owner) external virtual override {
+    function setPlatformOwner(uint256 marketID, address owner) external virtual override {
         address sender = msg.sender;
         address current = _platformOwner[marketID];
 
-        require((current == address(0) && (sender == _owner || sender == _authorizer)) ||
+        require(
+            (current == address(0) && (sender == _owner || sender == _authorizer)) ||
                 (current != address(0) && (sender == _owner || sender == current)),
-                "not-authorized");
-        
+            'not-authorized'
+        );
+
         _platformOwner[marketID] = owner;
 
         emit NewPlatformOwner(marketID, owner);
@@ -535,16 +671,14 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      * Withdraws available trading fee
      */
     function withdrawTradingFee() external virtual override {
-
-        uint invested = _tradingFeeInvested;
-        if(invested == 0) {
+        uint256 invested = _tradingFeeInvested;
+        if (invested == 0) {
             return;
         }
 
-        _interestManager.accrueInterest();
 
         _tradingFeeInvested = 0;
-        uint redeem = _interestManager.investmentTokenToUnderlying(invested);
+        uint256 redeem = _interestManager.investmentTokenToUnderlying(invested);
         _interestManager.redeem(_tradingFeeRecipient, redeem);
 
         emit TradingFeeRedeemed(redeem);
@@ -555,7 +689,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return The trading fee available to be paid out
      */
-    function getTradingFeePayable() public virtual view override returns (uint) {
+    function getTradingFeePayable() public view virtual override returns (uint256) {
         return _interestManager.investmentTokenToUnderlying(_tradingFeeInvested);
     }
 
@@ -565,7 +699,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      * @param authorizer The new authorizer address
      */
     function setAuthorizer(address authorizer) external virtual override onlyOwner {
-        require(authorizer != address(0), "invalid-params");
+        require(authorizer != address(0), 'invalid-params');
         _authorizer = authorizer;
     }
 
@@ -576,7 +710,13 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return Whether or not fees are disabled for a specific ServiceToken
      */
-    function isTokenFeeDisabled(address serviceToken) external virtual view override returns (bool) {
+    function isTokenFeeDisabled(address serviceToken)
+        external
+        view
+        virtual
+        override
+        returns (bool)
+    {
         return _tokenFeeKillswitch[serviceToken];
     }
 
@@ -586,14 +726,19 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      * @param serviceToken The ServiceToken
      * @param set Whether or not to enable the killswitch
      */
-    function setTokenFeeKillswitch(address serviceToken, bool set) external virtual override onlyOwner {
+    function setTokenFeeKillswitch(address serviceToken, bool set)
+        external
+        virtual
+        override
+        onlyOwner
+    {
         _tokenFeeKillswitch[serviceToken] = set;
     }
 
     /**
      * Sets the TokenFactory address. Only required once for deployment
      *
-     * @param factory The address of the TokenFactory 
+     * @param factory The address of the TokenFactory
      */
     function setTokenFactoryAddress(address factory) external virtual onlyOwner {
         require(address(_tokenFactory) == address(0));

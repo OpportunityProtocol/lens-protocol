@@ -8,48 +8,47 @@ import "../interface/IComptroller.sol";
 import "../interface/IInterestManager.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
+import {IAToken} from "@aave/core-v3/contracts/interfaces/IAToken.sol";
 
 /**
- * @title InterestManagerCompound
+ * @title InterestManagerAave
  * @author Alexander Schlindwein
  * 
  * Invests DAI into Compound to generate interest
  * Sits behind an AdminUpgradabilityProxy 
  */
-contract InterestManagerCompound is Ownable, Initializable {
+contract InterestManagerAave is Ownable, Initializable {
 
     using SafeMath for uint;
 
     // Dai contract
     IERC20 internal _dai;
-    // cDai contract
-    ICToken internal _cDai;
-    // COMP contract
-    IERC20 internal _comp;
-    // Address which is allowed to withdraw accrued COMP tokens
-    address internal _compRecipient;
+    // aDai contract
+    IAToken internal _aDai;
+    //Llending pool contract
+    IPool internal _pool;
+
+
 
     /**
      * Initializes the contract with all required values
      *
      * @param owner The owner of the contract
      * @param dai The Dai token address
-     * @param cDai The cDai token address
-     * @param comp The Comp token address
-     * @param compRecipient The address of the recipient of the Comp tokens
+     * @param aDai The aDai token address
+     * @param pool The aave lending pool token address
      */
-    function initialize(address owner, address dai, address cDai, address comp, address compRecipient) external virtual initializer {
+    function initialize(address owner, address dai, address aDai, address pool) external virtual initializer {
         require(dai != address(0) &&
-                cDai != address(0) && 
-                comp != address(0) &&
-                compRecipient != address(0),
+                aDai != address(0) &&
+                pool != address(0),
                 "invalid-params");
 
         setOwnerInternal(owner); // Checks owner to be non-zero
         _dai = IERC20(dai);
-        _cDai = ICToken(cDai);
-        _comp = IERC20(comp);
-        _compRecipient = compRecipient;
+        _aDai = IAToken(aDai);
+        _pool = IPool(pool);
     }
 
     /**
@@ -61,11 +60,18 @@ contract InterestManagerCompound is Ownable, Initializable {
      * @return The amount of minted cDai
      */
     function invest(uint amount) external virtual onlyOwner returns (uint) {
-        uint balanceBefore = _cDai.balanceOf(address(this));
+       /* uint balanceBefore = _cDai.balanceOf(address(this));
         require(_dai.balanceOf(address(this)) >= amount, "insufficient-dai");
         require(_dai.approve(address(_cDai), amount), "dai-cdai-approve");
         require(_cDai.mint(amount) == 0, "cdai-mint");
         uint balanceAfter = _cDai.balanceOf(address(this));
+        return balanceAfter.sub(balanceBefore);*/
+
+        uint balanceBefore = _aDai.balanceOf(address(this));
+        require(_dai.balanceOf(address(this)) >= amount, "insufficient-dai");
+        require(_dai.approve(address(_pool), amount), "dai-aavepool-approve");
+        _pool.supply(address(_dai), amount, address(this), 0);
+        uint balanceAfter = _aDai.balanceOf(address(this));
         return balanceAfter.sub(balanceBefore);
     }
 
@@ -78,11 +84,17 @@ contract InterestManagerCompound is Ownable, Initializable {
      * @return The amount of burned cDai
      */
     function redeem(address recipient, uint amount) external virtual onlyOwner returns (uint) {
-        uint balanceBefore = _cDai.balanceOf(address(this));
+        /*uint balanceBefore = _cDai.balanceOf(address(this));
         require(_cDai.redeemUnderlying(amount) == 0, "redeem");
         uint balanceAfter = _cDai.balanceOf(address(this));
         require(_dai.transfer(recipient, amount), "dai-transfer");
-        return balanceBefore.sub(balanceAfter);
+        return balanceBefore.sub(balanceAfter);*/
+
+        uint balanceBefore = _aDai.balanceOf(address(this));
+        _pool.withdraw(address(_dai), amount, recipient);
+        uint balanceAfter = _aDai.balanceOf(address(this));
+        require(_dai.transfer(recipient, amount), "dai-transfer");
+        return balanceAfter;
     }
 
     /**
@@ -94,27 +106,17 @@ contract InterestManagerCompound is Ownable, Initializable {
      * @return The amount of redeemed Dai
      */
     function redeemInvestmentToken(address recipient, uint amount) external virtual onlyOwner returns (uint) {
-        uint balanceBefore = _dai.balanceOf(address(this));
+       /* uint balanceBefore = _dai.balanceOf(address(this));
         require(_cDai.redeem(amount) == 0, "redeem");
         uint redeemed = _dai.balanceOf(address(this)).sub(balanceBefore);
         require(_dai.transfer(recipient, redeemed), "dai-transfer");
-        return redeemed;
-    }
+        return redeemed;*/
 
-    /**
-     * Updates accrued interest on the invested Dai
-     */
-    function accrueInterest() external virtual {
-        require(_cDai.accrueInterest() == 0, "accrue");
-    }
-
-    /**
-     * Withdraws the generated Comp tokens to the Comp recipient
-     */
-    function withdrawComp() external virtual {
-        address addr = address(this);
-        IComptroller(_cDai.comptroller()).claimComp(addr);
-        require(_comp.transfer(_compRecipient, _comp.balanceOf(addr)), "comp-transfer");
+        uint balanceBefore = _aDai.balanceOf(address(this));
+        _pool.withdraw(address(_dai), amount, recipient);
+        uint balanceAfter = _aDai.balanceOf(address(this));
+        require(_dai.transfer(recipient, amount), "dai-transfer");
+        return balanceAfter;
     }
 
     /**
@@ -125,7 +127,7 @@ contract InterestManagerCompound is Ownable, Initializable {
      * @return The amount of investment tokens
      */
     function underlyingToInvestmentToken(uint underlyingAmount) external virtual view returns (uint) {
-        return divScalarByExpTruncate(underlyingAmount, _cDai.exchangeRateStored());
+        return underlyingAmount;
     }
 
     /**
@@ -136,40 +138,6 @@ contract InterestManagerCompound is Ownable, Initializable {
      * @return The amount of underlying tokens
      */
     function investmentTokenToUnderlying(uint investmentTokenAmount) external virtual view returns (uint) {
-        return mulScalarTruncate(investmentTokenAmount, _cDai.exchangeRateStored());
+        return investmentTokenAmount;
     }
-
-    // ====================================== COMPOUND MATH ======================================
-    // https://github.com/compound-finance/compound-protocol/blob/master/contracts/Exponential.sol
-    //
-    // Modified to revert instead of returning an error code
-
-    function mulScalarTruncate(uint a, uint scalar) internal virtual pure returns (uint) {
-        uint product = mulScalar(a, scalar);
-        return truncate(product);
-    }
-
-    function mulScalar(uint a, uint scalar) internal virtual pure returns (uint) {
-        return a.mul(scalar);
-    }
-
-    function divScalarByExpTruncate(uint scalar, uint divisor) internal virtual pure returns (uint) {
-        uint fraction = divScalarByExp(scalar, divisor);
-        return truncate(fraction);
-    }
-
-    function divScalarByExp(uint scalar, uint divisor) internal virtual pure returns (uint) {
-        uint numerator = uint(10**18).mul(scalar);
-        return getExp(numerator, divisor);
-    }
-
-    function getExp(uint num, uint denom) internal virtual pure returns (uint) {
-        uint scaledNumerator = num.mul(10**18);
-        return scaledNumerator.div(denom);
-    }
-
-    function truncate(uint num) internal virtual pure returns (uint) {
-        return num / 10**18;
-    }
-
 }

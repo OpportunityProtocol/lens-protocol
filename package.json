@@ -34,7 +34,7 @@
   },
   "homepage": "https://github.com/aave/lens-protocol#readme",
   "devDependencies": {
-    "@nomiclabs/hardhat-ethers": "2.0.2",
+    "@nomiclabs/hardhat-ethers": "^2.0.6",
     "@nomiclabs/hardhat-etherscan": "2.1.8",
     "@typechain/ethers-v5": "8.0.5",
     "@typechain/hardhat": "3.0.0",
@@ -71,6 +71,8 @@
     }
   },
   "dependencies": {
+    "@aave/core-v3": "^1.13.1",
+    "@ethersproject/contracts": "^5.6.0",
     "@openzeppelin/contracts": "^4.6.0",
     "@uniswap/v3-core": "^1.0.1"
   },
