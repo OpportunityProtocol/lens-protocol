@@ -4,7 +4,6 @@ import fs from 'fs';
 import { task } from 'hardhat/config';
 import {
   LensHub__factory,
-  ApprovalFollowModule__factory,
   CollectNFT__factory,
   Currency__factory,
   FreeCollectModule__factory,
@@ -20,17 +19,13 @@ import {
   RevertCollectModule__factory,
   TimedFeeCollectModule__factory,
   TransparentUpgradeableProxy__factory,
-  SimpleCentralizedArbitrator__factory,
-  GigEarth__factory,
-  RelationshipContentReferenceModule__factory,
-  RelationshipFollowModule__factory,
   ProfileTokenURILogic__factory,
   LensPeriphery__factory,
   UIDataProvider__factory,
   ProfileFollowModule__factory,
   RevertFollowModule__factory,
+  ProfileCreationProxy__factory,
 } from '../typechain-types';
-import { GigEarthInterface } from '../typechain-types/GigEarth';
 import { deployContract, waitForTx } from './helpers/utils';
 
 const TREASURY_FEE_BPS = 50;
@@ -45,11 +40,13 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   const deployer = accounts[0];
   const governance = accounts[1];
   const treasuryAddress = accounts[2].address;
+  const proxyAdminAddress = deployer.address;
+  const profileCreatorAddress = deployer.address;
 
   // Nonce management in case of deployment issues
   let deployerNonce = await ethers.provider.getTransactionCount(deployer.address);
 
-  console.log('\n\t -- Deploying Module Globals --');
+  console.log('\n\t-- Deploying Module Globals --');
   const moduleGlobals = await deployContract(
     new ModuleGlobals__factory(deployer).deploy(
       governance.address,
@@ -118,7 +115,7 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   let proxy = await deployContract(
     new TransparentUpgradeableProxy__factory(deployer).deploy(
       lensHubImpl.address,
-      deployer.address,
+      proxyAdminAddress,
       data,
       { nonce: deployerNonce++ }
     )
@@ -239,6 +236,13 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     })
   );
 
+  console.log('\n\t-- Deploying Profile Creation Proxy --');
+  const profileCreationProxy = await deployContract(
+    new ProfileCreationProxy__factory(deployer).deploy(profileCreatorAddress, lensHub.address, {
+      nonce: deployerNonce++,
+    })
+  );
+
   // Whitelist the collect modules
   console.log('\n\t-- Whitelisting Collect Modules --');
   let governanceNonce = await ethers.provider.getTransactionCount(governance.address);
@@ -305,9 +309,13 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
       .whitelistCurrency(currency.address, true, { nonce: governanceNonce++ })
   );
 
-  const gigEarthInstance = await GigEarth__factory.connect(gigEarth.address, deployer)
-  await gigEarthInstance.setLensFollowModule(gigEarthFollowModule.address)
-  await gigEarthInstance.setLensContentReferenceModule(gigEarthReferenceModule.address)
+  // Whitelist the profile creation proxy
+  console.log('\n\t-- Whitelisting Profile Creation Proxy --');
+  await waitForTx(
+    lensHub.whitelistProfileCreator(profileCreationProxy.address, true, {
+      nonce: governanceNonce++,
+    })
+  );
 
   // Save and log the addresses
   const addrs = {
@@ -337,6 +345,7 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     'gig earth follow module': gigEarthFollowModule.address,
     'simple arbitrator': simpleArbitrator.address,
     'UI data provider': uiDataProvider.address,
+    'Profile creation proxy': profileCreationProxy.address,
   };
   const json = JSON.stringify(addrs, null, 2);
   console.log(json);
