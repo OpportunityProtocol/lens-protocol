@@ -18,19 +18,18 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
     using Queue for Queue.Uint256Queue;
 
     /**
+     * Emitted when an address is registered with lenshub and lenstalent.
+     * 
+     * @param registeredAddress The address submitting the registration.
+     * @param lensHandle The handle chosen by the registering address.
      */
-    event UserRegistered(address indexed universalAddress);
-
-    /**
-     */
-    event UserSummaryCreated(uint256 indexed registrationTimestamp, uint256 indexed index, address indexed universalAddress);
+    event UserRegistered(address indexed registeredAddress, string indexed lensHandle);
 
     /**
      * @dev To be emitted upon deploying a market
      */
     event MarketCreated(
         uint256 indexed index,
-        address indexed creator,
         string indexed marketName
     );
 
@@ -143,29 +142,28 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
     ///////////////////////////////////////////// User
 
     /**
-     * Registers an address as a worker on gig earth
-     * @param vars LensProtocol::DataTypes::CreateProfileData struct containing create profile data
+     * Registers an address as a verified freelancer on lenstalent
+     *
+     * @param vars LensProtocol::DataTypes::CreateProfileData struct containing lenshub create profile data
      */
     function registerWorker(DataTypes.CreateProfileData calldata vars) external {
         if (isRegisteredUser(msg.sender)) {
-            revert();
+            revert("Duplicate registration");
         }   
 
         //create lens hub profile
         lensHub.createProfile(vars);
-        uint256 lensProfileId = lensHub.getProfileIdByHandle(vars.handle);
-        addressToLensProfileId[msg.sender] = lensProfileId;
-
-        emit UserRegistered(msg.sender);
+        addressToLensProfileId[msg.sender] = lensHub.getProfileIdByHandle(vars.handle);
+        emit UserRegistered(msg.sender, vars.handle);
     }
 
     /**
-     * Returns the user's registration status
-     * @param userAddress The address to check
-     * @return True or false based on if the user is registered or not
+     * Returns the registration status of the address
+     * @param account The address to check
+     * @return bool true or false based on the registration status of the address
      */
-    function isRegisteredUser(address userAddress) public view returns(bool) {
-        return addressToLensProfileId[userAddress] != 0;
+    function isRegisteredUser(address account) public view returns(bool) {
+        return addressToLensProfileId[account] != 0;
     }
 
     ///////////////////////////////////////////// Service Functions
@@ -672,5 +670,13 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
 
     function getProtocolFee() external view onlyOwner returns(uint) {
         return _protocolFee;
+    }
+
+    function getLensProfileHandleFromAddress(address account) public view returns(uint) {
+        return addressToLensProfileId[account];
+    }
+
+    function getLensProfileIdFromAddress(address account) public view returns(uint) {
+        lensHub.getHandle(addressToLensProfileId[account]);
     }
 }
