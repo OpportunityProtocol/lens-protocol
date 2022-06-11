@@ -28,7 +28,7 @@ async function main() {
     await tokenExchange.initialize(admin, admin, admin, interestManager.address, dai.address)
     await networkManager.initialize(admin, tokenFactory.address, admin, admin, lensHub, admin, dai.address)
 
-    console.log('Dai: ' + await (await dai.deployed()).resolvedAddress)
+    console.log('Controlled Dai: ' + await (await dai.deployed()).resolvedAddress)
     console.log('Interest Manager: ', await (await interestManager.deployed()).resolvedAddress)
     console.log('Token Exchange: ', await (await tokenExchange.deployed()).resolvedAddress)
     console.log('Token Factory: ', await (await tokenFactory.deployed()).resolvedAddress)
