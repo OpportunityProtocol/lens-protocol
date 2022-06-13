@@ -25,6 +25,12 @@ import {
   ProfileFollowModule__factory,
   RevertFollowModule__factory,
   ProfileCreationProxy__factory,
+  ControlledERC20__factory,
+  InterestManagerAave__factory,
+  TokenExchange__factory,
+  TokenFactory__factory,
+  ServiceToken__factory,
+  NetworkManager__factory,
 } from '../typechain-types';
 import { deployContract, waitForTx } from './helpers/utils';
 
@@ -286,6 +292,45 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     })
   );
 
+  const admin = '0xd72f5B8Eee99702C32AA45Dd8b41c7c8325Fbbc8'
+  const aDaiAddress = '0xDD4f3Ee61466C4158D394d57f3D4C397E91fBc51'
+  const aavePool = '0x6C9fB0D5bD9429eb9Cd96B85B81d872281771E6B'
+  //const lensHub = '0x60Ae865ee4C725cd04353b5AAb364553f56ceF82'
+
+  // Lens Talent
+  const controlledERC20 = await deployContract(
+    new ControlledERC20__factory(deployer).deploy('DAI', 'DAI')
+  )
+
+  const interestManagerAave = await deployContract(
+    new InterestManagerAave__factory(deployer).deploy()
+  )
+
+  const tokenExchange = await deployContract(
+    new TokenExchange__factory(deployer).deploy()
+  )
+
+  const tokenFactory = await deployContract(
+    new TokenFactory__factory(deployer).deploy()
+  )
+
+  const tokenLogic = await deployContract(
+    new ServiceToken__factory(deployer).deploy()
+  )
+
+  const networkManager = await deployContract(
+    new NetworkManager__factory(deployer).deploy()
+  )
+
+  await ControlledERC20__factory.connect(deployer.address, deployer).mint(deployer.address, 10000)
+  await InterestManagerAave__factory.connect(deployer.address, deployer).initialize(networkManager.address, controlledERC20.address, aDaiAddress, aavePool)
+  await TokenFactory__factory.connect(deployer.address, deployer).initialize(admin, tokenExchange.address, tokenLogic.address, networkManager.address)
+  await TokenExchange__factory.connect(deployer.address, deployer).initialize(admin, admin, admin, interestManagerAave.address, controlledERC20.address)
+  await NetworkManager__factory.connect(deployer.address, deployer).initialize(admin, tokenFactory.address, admin, admin, lensHub.address, admin, controlledERC20.address)
+  
+  await lensHub.whitelistProfileCreator(networkManager.address, true)
+  
+  console.log(deployer)
   // Save and log the addresses
   const addrs = {
     'lensHub proxy': lensHub.address,
@@ -311,6 +356,12 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     'follower only reference module': followerOnlyReferenceModule.address,
     'UI data provider': uiDataProvider.address,
     'Profile creation proxy': profileCreationProxy.address,
+    'Interest Manager Aave: ':  interestManagerAave.address,
+    'Token Factory: ':  tokenFactory.address,
+    'Token Exchange: ':  tokenExchange.address,
+    'Network Manager: ': networkManager.address,
+    'Token Logic: ': tokenLogic.address,
+    'DAI: ': controlledERC20.address
   };
   const json = JSON.stringify(addrs, null, 2);
   console.log(json);

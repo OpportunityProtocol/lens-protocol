@@ -1,3 +1,8 @@
+// Deploy Mumbai: npx hardhat run lenstalent/scripts/full_deploy_polygon_testnet.ts --network mumbai
+// npx hardhat node --fork https://polygon-mumbai.g.alchemy.com/v2/sJKSDERTC3dMBPFYliQnsbLFa_0Zmiv0 --fork-block-number 12964900
+// docker-compose build && docker-compose run -u root --name lens contracts-env bash
+// docker exec -u root -it lens bash
+
 import { Contract, ContractFactory } from "@ethersproject/contracts"
 
 const { ethers } = require('hardhat')
@@ -16,7 +21,7 @@ async function main() {
     const ServiceToken: ContractFactory  = await ethers.getContractFactory('ServiceToken')
     const InterestManager: ContractFactory  = await ethers.getContractFactory('InterestManagerAave')
 
-    const dai: Contract = await Dai.deploy('DAI', 'DAI')
+    const dai: Contract = await Dai.deploy('DAI', 'DAI', )
     const interestManager: Contract = await InterestManager.deploy()
     const tokenExchange: Contract = await TokenExchange.deploy()
     const tokenFactory: Contract = await TokenFactory.deploy()

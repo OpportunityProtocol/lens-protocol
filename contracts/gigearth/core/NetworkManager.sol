@@ -13,6 +13,7 @@ import "../interface/ITokenFactory.sol";
 import "./TokenExchange.sol";
 import "../util/Initializable.sol";
 import "hardhat/console.sol";
+import "../util/Ownable.sol";
 
 contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
     using Queue for Queue.Uint256Queue;
@@ -672,11 +673,7 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
         return _protocolFee;
     }
 
-    function getLensProfileHandleFromAddress(address account) public view returns(uint) {
-        return addressToLensProfileId[account];
-    }
-
     function getLensProfileIdFromAddress(address account) public view returns(uint) {
-        lensHub.getHandle(addressToLensProfileId[account]);
+        return addressToLensProfileId[account];
     }
 }
