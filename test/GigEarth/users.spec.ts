@@ -2,7 +2,7 @@
 import { expect } from 'chai'
 import { ContractReceipt, BigNumber, Event, Signer, Wallet, BigNumberish } from 'ethers';
 import '@nomiclabs/hardhat-ethers';
-import { adminAccount, baseCost, dai, employer, governance, governanceAddress, hatchTokens, ideaTokenExchange, ideaTokenFactory, makeSuiteCleanRoom, moduleGlobals, platformFeeRate, priceRise, serviceCollectModule, tenPow18, testWallet, tradingFeeRate, worker, workerAddress, zeroAddress } from '../__setup.spec';
+import { adminAccount, baseCost, currency, dai, employer, governance, governanceAddress, hatchTokens, ideaTokenExchange, ideaTokenFactory, makeSuiteCleanRoom, moduleGlobals, platformFeeRate, priceRise, serviceCollectModule, tenPow18, testWallet, tradingFeeRate, worker, workerAddress, zeroAddress } from '../__setup.spec';
 
 import {
   lensHub,
@@ -24,12 +24,9 @@ import { ethers } from 'hardhat';
 describe("Users", async function () {
   makeSuiteCleanRoom('Users', function () {
     beforeEach(async function () {
-      console.log('BEFORE: ' + await dai.balanceOf(workerAddress))
-      await dai.mint(workerAddress, BigNumber.from('5000'))
-      console.log('After 1: ' + await dai.balanceOf(workerAddress))
-      await dai.mint(employer.address, BigNumber.from('5000'))
-      console.log('After 2: ' + await dai.balanceOf(workerAddress))
-      expect(await dai.balanceOf(workerAddress)).to.equal(BigNumber.from('5000'))
+      await currency.mint(workerAddress, BigNumber.from('100000'))
+      await currency.mint(employer.address, BigNumber.from('100000'))
+      expect(await currency.balanceOf(workerAddress)).to.equal(BigNumber.from('100000'))
     });
 
     context('Users', function () {
@@ -122,16 +119,15 @@ describe("Users", async function () {
           followModuleInitData: [],
           followNFTURI: 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
         }
-        console.log('A')
-        console.log(worker.address)
+
         //register worker to lens
         await gigEarth.connect(worker).registerWorker(testWorkerProfileData, {
           gasLimit: 12450000
         })
-console.log('A')
+
         //create a market
-        const testMarketName = 'TEST_MARKET'
-console.log('B')
+        const testMarketName: string = 'TEST_MARKET'
+
         await ideaTokenFactory.connect(adminAccount).addMarket(
           testMarketName,
           baseCost,
@@ -141,35 +137,29 @@ console.log('B')
           platformFeeRate,
           false
         );
-console.log('C')
+
         //create a service for the registered worker
         const workerProfileId = await lensHub.getProfileIdByHandle('testWorkerHandle')
         const marketID = await (await ideaTokenFactory.getMarketIDByName(testMarketName))._hex
-        const details = await (await ideaTokenFactory.getMarketDetailsByID(marketID)).name
-        const workerNonce = await (await lensHub.sigNonces(await worker.getAddress())).toNumber()
         const employerNonce = await (await lensHub.sigNonces(await employer.getAddress())).toNumber()
-        const workerDeadline = MAX_UINT256
-console.log('D')
+
         await lensHub.connect(governance).whitelistCollectModule(serviceCollectModule.address, true);
-          console.log('COLLECT MDOULE ADDRESS: ', serviceCollectModule.address)
-        //create service
+
         const createServiceTx = await gigEarth.connect(worker).createService(
           marketID,
           'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
           100,
-          10,
+          100,
           serviceCollectModule.address
         )
-        console.log('D')
+
         await createServiceTx.wait()
-console.log('F')
 
         const servicePubId = await gigEarth.getPubIdFromServiceId(1)
-        console.log('ServicePubID: ', String(servicePubId))
         const collectWithSigData = await getCollectWithSigParts(workerProfileId, String(servicePubId), [], employerNonce, '0')
         const purchaseId = await gigEarth.getPurchaseIdFromServiceId(1)
-
-        //employer purchases service
+        
+        await currency.connect(employer).approve(serviceCollectModule.address, BigNumber.from('100000'))
         await gigEarth.connect(employer).purchaseServiceOffering(1, zeroAddress, {
           v: collectWithSigData.v,
           r: collectWithSigData.r,
@@ -177,17 +167,18 @@ console.log('F')
           deadline: '0'
         })
         
+        const workerBalanceBeforeResolution = Number(await currency.balanceOf(worker.address))
+        
         await gigEarth.connect(employer).resolveService(1, purchaseId);
 
+        const workerBalanceAfterResolution = Number(await currency.balanceOf(worker.address));
+        const serviceData = await gigEarth.getServiceData(1);
+        const protocolFee = Number(await gigEarth.getProtocolFee());
+        const treasuryPayout = (Number(serviceData.wad) * protocolFee / 10000)
+        const adjustedPayout = Number(serviceData.wad) - treasuryPayout;
+        const expectedBalanceAfterResolution = workerBalanceBeforeResolution + adjustedPayout
 
-        let serviceData;
-        serviceData = await gigEarth.getServiceData(1);
-
-        const protocolFee = await gigEarth.getProtocolFee();
-        const workerBalance = await dai.balanceOf(worker.address)
-        const expectedBalanceAfterResolution = serviceData.wad * 50
-
-        expect(workerBalance).equals(expectedBalanceAfterResolution)
+        expect(Math.round(workerBalanceAfterResolution)).equals(Math.round(expectedBalanceAfterResolution))
       })
 
      /* it("user should be able to buy and sell service tokens after settling service", async () => {
