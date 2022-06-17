@@ -32,7 +32,7 @@ import {
   ServiceToken__factory,
   NetworkManager__factory,
 } from '../typechain-types';
-import { deployContract, waitForTx } from './helpers/utils';
+import { deployContract, ProtocolState, waitForTx, ZERO_ADDRESS } from './helpers/utils';
 
 const TREASURY_FEE_BPS = 50;
 const LENS_HUB_NFT_NAME = 'Lens Protocol Profiles';
@@ -292,7 +292,17 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     })
   );
 
-  const admin = '0xd72f5B8Eee99702C32AA45Dd8b41c7c8325Fbbc8'
+  const networkManager = await deployContract(
+    new NetworkManager__factory(deployer).deploy()
+  )
+
+  await waitForTx(
+    lensHub.whitelistProfileCreator(networkManager.address, true, {
+      nonce: governanceNonce++
+    })
+  )
+
+  const admin = '0x34505b14DbFC50253efd4902FD3DbcB3CF620258'
   const aDaiAddress = '0xDD4f3Ee61466C4158D394d57f3D4C397E91fBc51'
   const aavePool = '0x6C9fB0D5bD9429eb9Cd96B85B81d872281771E6B'
   //const lensHub = '0x60Ae865ee4C725cd04353b5AAb364553f56ceF82'
@@ -318,18 +328,11 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     new ServiceToken__factory(deployer).deploy()
   )
 
-  const networkManager = await deployContract(
-    new NetworkManager__factory(deployer).deploy()
-  )
-
   await ControlledERC20__factory.connect(deployer.address, deployer).mint(deployer.address, 10000)
   await InterestManagerAave__factory.connect(deployer.address, deployer).initialize(networkManager.address, controlledERC20.address, aDaiAddress, aavePool)
   await TokenFactory__factory.connect(deployer.address, deployer).initialize(admin, tokenExchange.address, tokenLogic.address, networkManager.address)
   await TokenExchange__factory.connect(deployer.address, deployer).initialize(admin, admin, admin, interestManagerAave.address, controlledERC20.address)
   await NetworkManager__factory.connect(deployer.address, deployer).initialize(admin, tokenFactory.address, admin, admin, lensHub.address, admin, controlledERC20.address)
-  
-  await lensHub.whitelistProfileCreator(networkManager.address, true)
-  
   console.log(deployer)
   // Save and log the addresses
   const addrs = {

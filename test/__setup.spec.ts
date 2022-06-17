@@ -88,6 +88,8 @@ import {
   GigEarthContentReferenceModule,
   NetworkManager,
   GigEarthContentReferenceModule__factory,
+  ServiceCollectModule,
+  ServiceCollectModule__factory,
 } from '../typechain-types';
 import { LensHubLibraryAddresses } from '../typechain-types/factories/LensHub__factory';
 import { FAKE_PRIVATEKEY, ZERO_ADDRESS } from './helpers/constants';
@@ -160,6 +162,7 @@ export let limitedFeeCollectModule: LimitedFeeCollectModule;
 export let limitedTimedFeeCollectModule: LimitedTimedFeeCollectModule;
 export let gigEarth: NetworkManager
 export let simpleArbitrator: SimpleCentralizedArbitrator
+export let serviceCollectModule: ServiceCollectModule
 
 // Follow
 export let approvalFollowModule: ApprovalFollowModule;
@@ -292,7 +295,6 @@ before(async function () {
     data
   );
 
-
   // Connect the hub proxy to the LensHub factory and the user for ease of use.
   lensHub = LensHub__factory.connect(proxy.address, user);
 
@@ -340,7 +342,7 @@ before(async function () {
   multiAction = await new MultiAction__factory(deployer).deploy(ideaTokenExchange.address, ideaTokenFactory.address, tokenVault.address, dai.address, uniswapV2Router02.address, wEth.address)
   await multiAction.deployed()
 
-  await gigEarth.initialize(adminAccountAddress, ideaTokenFactory.address, await gigEarthTreasury.getAddress(), simpleArbitrator.address, lensHub.address, await gigEarthGovernance.getAddress(), dai.address)
+  await gigEarth.initialize(ideaTokenFactory.address, adminAccountAddress, simpleArbitrator.address, lensHub.address,ZERO_ADDRESS, adminAccountAddress, dai.address)
 
   await interestManagerCompound
     .connect(adminAccount)
@@ -362,10 +364,7 @@ before(async function () {
 
 
   await ideaTokenExchange.connect(adminAccount).setTokenFactoryAddress(ideaTokenFactory.address)
-
-  // await gigEarth.connect(gigEarthGovernance).setLensContentReferenceModule(relationshipReferenceModule.address)
-  //await gigEarth.connect(gigEarthGovernance).setLensFollowModule(relationshipFollowModule.address)
-
+  
   // LensPeriphery
   lensPeriphery = await new LensPeriphery__factory(deployer).deploy(lensHub.address);
   lensPeriphery = lensPeriphery.connect(user);
@@ -374,6 +373,7 @@ before(async function () {
   currency = await new Currency__factory(deployer).deploy();
 
   // Modules
+  serviceCollectModule = await new ServiceCollectModule__factory(deployer).deploy(lensHub.address, moduleGlobals.address, gigEarth.address)
   freeCollectModule = await new FreeCollectModule__factory(deployer).deploy(lensHub.address);
   revertCollectModule = await new RevertCollectModule__factory(deployer).deploy();
   feeCollectModule = await new FeeCollectModule__factory(deployer).deploy(
@@ -419,9 +419,6 @@ before(async function () {
   ).to.not.be.reverted;
   await expect(
     lensHub.connect(governance).whitelistProfileCreator(testWallet.address, true)
-  ).to.not.be.reverted;
-  await expect(
-    lensHub.connect(governance).whitelistProfileCreator(gigEarth.address, true)
   ).to.not.be.reverted;
 
   expect(lensHub).to.not.be.undefined;

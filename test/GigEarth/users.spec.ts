@@ -2,7 +2,7 @@
 import { expect } from 'chai'
 import { ContractReceipt, BigNumber, Event, Signer, Wallet, BigNumberish } from 'ethers';
 import '@nomiclabs/hardhat-ethers';
-import { adminAccount, baseCost, dai, employer, governance, governanceAddress, hatchTokens, ideaTokenExchange, ideaTokenFactory, makeSuiteCleanRoom, moduleGlobals, platformFeeRate, priceRise, tenPow18, testWallet, tradingFeeRate, worker, workerAddress, zeroAddress } from '../__setup.spec';
+import { adminAccount, baseCost, dai, employer, governance, governanceAddress, hatchTokens, ideaTokenExchange, ideaTokenFactory, makeSuiteCleanRoom, moduleGlobals, platformFeeRate, priceRise, serviceCollectModule, tenPow18, testWallet, tradingFeeRate, worker, workerAddress, zeroAddress } from '../__setup.spec';
 
 import {
   lensHub,
@@ -15,10 +15,11 @@ import {
 } from '../__setup.spec'
 
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { getPostWithSigParts, getSetDispatcherWithSigParts } from '../helpers/utils';
+import { getCollectWithSigParts, getPostWithSigParts, getSetDispatcherWithSigParts, ProtocolState } from '../helpers/utils';
 import { CreateProfileDataStruct, SetDispatcherWithSigDataStruct, PostWithSigDataStruct, EIP712SignatureStruct } from '../../typechain-types/LensHub';
 import { MAX_UINT256 } from '../helpers/constants';
 import { RelationshipStruct } from '../../typechain-types/NetworkManager';
+import { ethers } from 'hardhat';
 
 describe("Users", async function () {
   makeSuiteCleanRoom('Users', function () {
@@ -107,6 +108,12 @@ describe("Users", async function () {
       })*/
 
       it("user should be able to purchase service and settle service", async () => {
+        await expect(lensHub.connect(governance).setState(ProtocolState.Unpaused)).to.not.be.reverted;
+        await expect(
+          lensHub.connect(governance).whitelistProfileCreator(gigEarth.address, true)
+        ).to.not.be.reverted;
+
+        //create profile data struct
         const testWorkerProfileData: CreateProfileDataStruct = {
           to: await gigEarth.address,
           handle: "testworkerhandle",
@@ -115,12 +122,16 @@ describe("Users", async function () {
           followModuleInitData: [],
           followNFTURI: 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
         }
-
-        await gigEarth.connect(worker).registerWorker(testWorkerProfileData)
-
-        //create market
+        console.log('A')
+        console.log(worker.address)
+        //register worker to lens
+        await gigEarth.connect(worker).registerWorker(testWorkerProfileData, {
+          gasLimit: 12450000
+        })
+console.log('A')
+        //create a market
         const testMarketName = 'TEST_MARKET'
-
+console.log('B')
         await ideaTokenFactory.connect(adminAccount).addMarket(
           testMarketName,
           baseCost,
@@ -130,37 +141,43 @@ describe("Users", async function () {
           platformFeeRate,
           false
         );
-
-        //create service
+console.log('C')
+        //create a service for the registered worker
         const workerProfileId = await lensHub.getProfileIdByHandle('testWorkerHandle')
         const marketID = await (await ideaTokenFactory.getMarketIDByName(testMarketName))._hex
         const details = await (await ideaTokenFactory.getMarketDetailsByID(marketID)).name
         const workerNonce = await (await lensHub.sigNonces(await worker.getAddress())).toNumber()
+        const employerNonce = await (await lensHub.sigNonces(await employer.getAddress())).toNumber()
         const workerDeadline = MAX_UINT256
-
-        await lensHub.connect(governance).whitelistCollectModule(zeroAddress, true);
-
-        const post = await getPostWithSigParts(workerProfileId, 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan', zeroAddress, [], zeroAddress, [], workerNonce, workerDeadline)
-        const postServiceEIP712SignatureStruct: EIP712SignatureStruct = {
-          v: post.v,
-          r: post.r,
-          s: post.s,
-          deadline: workerDeadline
-        }
-
+console.log('D')
+        await lensHub.connect(governance).whitelistCollectModule(serviceCollectModule.address, true);
+          console.log('COLLECT MDOULE ADDRESS: ', serviceCollectModule.address)
+        //create service
         const createServiceTx = await gigEarth.connect(worker).createService(
           marketID,
           'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
           100,
           10,
-          10,
-          postServiceEIP712SignatureStruct
+          serviceCollectModule.address
         )
-
+        console.log('D')
         await createServiceTx.wait()
+console.log('F')
 
-        await gigEarth.connect(employer).purchaseServiceOffering(1, zeroAddress);
-        await gigEarth.connect(employer).resolveService(1, 1);
+        const servicePubId = await gigEarth.getPubIdFromServiceId(1)
+        console.log('ServicePubID: ', String(servicePubId))
+        const collectWithSigData = await getCollectWithSigParts(workerProfileId, String(servicePubId), [], employerNonce, '0')
+        const purchaseId = await gigEarth.getPurchaseIdFromServiceId(1)
+
+        //employer purchases service
+        await gigEarth.connect(employer).purchaseServiceOffering(1, zeroAddress, {
+          v: collectWithSigData.v,
+          r: collectWithSigData.r,
+          s: collectWithSigData.s,
+          deadline: '0'
+        })
+        
+        await gigEarth.connect(employer).resolveService(1, purchaseId);
 
 
         let serviceData;
@@ -177,7 +194,7 @@ describe("Users", async function () {
 
       })*/
 
-      it("user should be able to purchase and settle contract", async () => {
+      /*it("user should be able to purchase and settle contract", async () => {
         const testWorkerProfileData: CreateProfileDataStruct = {
           to: await gigEarth.address,
           handle: "testworkerhandle",
@@ -241,7 +258,7 @@ describe("Users", async function () {
         expect(contractData.contractOwnership).to.equal(2)
         expect(workerBalanceAfter).equals(expectedBalance)
         expect(await dai.balanceOf(await gigEarthTreasury.getAddress())).to.equal(protocolPayout)
-      })
+      })*/
     })
   })
 });

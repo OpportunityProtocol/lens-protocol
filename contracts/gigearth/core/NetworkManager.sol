@@ -1,21 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.7;
 
+import "../util/Initializable.sol";
 import "../interface/IArbitrable.sol";
 import "../interface/IEvidence.sol";
+import "../interface/ITokenFactory.sol";
 import "../../interfaces/ILensHub.sol";
 import "../../libraries/DataTypes.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../libraries/Queue.sol";
 import "../libraries/NetworkLibrary.sol";
-import "../interface/ITokenFactory.sol";
-import "./TokenExchange.sol";
-import "../util/Initializable.sol";
-import "hardhat/console.sol";
-import "../util/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
+import "hardhat/console.sol";
+
+interface IProfileCreator {
+    function proxyCreateProfile(DataTypes.CreateProfileData memory vars) external;
+}
+
+interface IServiceCollectModule {
+    function releaseCollectedFunds(uint256 profileId, uint256 pubId) external;
+    function emergencyReleaseDisputedFunds(uint256 profileId, uint256 pubId, address recipient) external;
+
+}
+
+contract NetworkManager is Initializable, IArbitrable, IEvidence {
     using Queue for Queue.Uint256Queue;
 
     /**
@@ -51,10 +60,10 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
 
     /**
      */
-    event ServicePurchased(uint256 indexed purchaseId, uint256 indexed serviceId, address indexed purchaser, address referral);
-
+    event ServicePurchased(uint256 purchaseId, uint256 pubId, uint256 indexed serviceId, address indexed serviceOwner, address indexed purchaser, address referral);
     IArbitrator public arbitrator;
     ILensHub public lensHub;
+    IProfileCreator public proxyProfileCreator;
 
     uint256 constant numberOfRulingOptions = 2;
     uint256 public constant arbitrationFeeDepositPeriod = 1;
@@ -78,13 +87,14 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
 
     uint256 _claimedServiceCounter;
     NetworkLibrary.Service[] public services;
-    mapping(uint256 => uint256) public serviceIdToMaxWaitlistSize;
     mapping(uint256 => Queue.Uint256Queue) private serviceIdToWaitlist;
     mapping(uint256 => NetworkLibrary.Service) public serviceIdToService;
     mapping(uint256 => NetworkLibrary.PurchasedServiceMetadata) public purchasedServiceIdToMetdata;
 
     mapping(uint256 => uint256) public relationshipIDToMarketID;
     mapping(uint256 => uint256) public serviceIDToMarketID;
+    mapping(uint256 => uint256) public serviceIdToPublicationId;
+    mapping(uint256 => uint256) public serviceIdToPurchaseId;
 
     modifier onlyWhenOwnership(uint256 contractId, NetworkLibrary.ContractOwnership ownership) {
         _;
@@ -118,24 +128,24 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
     }
 
     function initialize(
-        address owner, 
         address tokenFactory,
         address _treasury,
         address _arbitrator,
         address _lensHub,
+        address _proxyProfileCreator,
         address _governance,
         address dai
         ) external virtual initializer {
         require(tokenFactory != address(0), "token factory cannot be address0");
-        require(owner != address(0), "owner cannot be address 0");
         require(_treasury != address(0), "treasury cannot be address 0");
         require(_arbitrator != address(0), "arbitrator cannot be address 0");
         require(_lensHub != address(0), "lens hub cannot be address 0");
-        _owner = owner;
+       // require(_proxyProfileCreator != address(0), "proxy profile creator");
         governance = _governance;
         treasury = _treasury;
         arbitrator = IArbitrator(_arbitrator);
         lensHub = ILensHub(_lensHub);
+        proxyProfileCreator = IProfileCreator(_proxyProfileCreator);
         _dai = IERC20(dai);
         _tokenFactory = ITokenFactory(tokenFactory);
     }
@@ -150,11 +160,21 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
     function registerWorker(DataTypes.CreateProfileData calldata vars) external {
         if (isRegisteredUser(msg.sender)) {
             revert("Duplicate registration");
-        }   
+        }
 
-        //create lens hub profile
-        lensHub.createProfile(vars);
-        addressToLensProfileId[msg.sender] = lensHub.getProfileIdByHandle(vars.handle);
+       // proxyProfileCreator.proxyCreateProfile(vars); //test
+        /* bytes memory b;
+        b = abi.encodePacked(vars.handle, ".test");
+        string memory registeredHandle = string(b);*/
+
+       lensHub.createProfile(vars); //prod
+
+        bytes memory b;
+        b = abi.encodePacked(vars.handle);
+        string memory registeredHandle = string(b);
+    
+        addressToLensProfileId[msg.sender] = lensHub.getProfileIdByHandle(registeredHandle);
+        console.log("Returned handle: ", lensHub.getProfileIdByHandle(registeredHandle));
         emit UserRegistered(msg.sender, vars.handle);
     }
 
@@ -174,21 +194,18 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param marketId The market id the service belongs to
      * @param metadataPtr The ipfs hash for the metadata storage
      * @param wad The cost of the service
-     * @param initialMaxWaitlistSize The payout for referral based purchases
      * @param referralSharePayout The share to payout to the referral address
-     * @param postSignature EIP712Signature to confirm lens posting.
      */
     function createService(
         uint256 marketId, 
         string calldata metadataPtr, 
         uint256 wad, 
-        uint256 initialMaxWaitlistSize,
         uint256 referralSharePayout,
-        DataTypes.EIP712Signature calldata postSignature
+        address lensTalentServiceCollectModule
     ) public returns(uint) {
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID(marketId);
         uint256 serviceId = _tokenFactory.addToken(marketDetails.name, marketDetails.id, msg.sender);
-
+    console.log('Service ID: ', serviceId);
         //create service
         NetworkLibrary.Service memory newService = NetworkLibrary.Service({
             marketId: marketId,
@@ -196,29 +213,35 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
             metadataPtr: metadataPtr,
             wad: wad,
             id: serviceId,
-            exist: false,
+            exist: true,
             referralShare: referralSharePayout,
-            maxSize: initialMaxWaitlistSize
+            collectModule: lensTalentServiceCollectModule
         });
 
-        bytes memory collectModuleInitData = abi.encode(serviceId, newService);
-        bytes memory referenceModuleInitData = abi.encode(serviceId, newService);
+        bytes memory collectModuleInitData = abi.encode(wad, address(_dai), msg.sender, referralSharePayout, serviceId);
+        bytes memory referenceModuleInitData = abi.encode(newService);
 
+        console.log(addressToLensProfileId[msg.sender]);
         //create lens post
-        DataTypes.PostWithSigData memory vars = DataTypes.PostWithSigData({
+        DataTypes.PostData memory vars = DataTypes.PostData({
             profileId: addressToLensProfileId[msg.sender],
             contentURI: metadataPtr,
-            collectModule: address(0),
+            collectModule: lensTalentServiceCollectModule,
             collectModuleInitData: collectModuleInitData,
             referenceModule: LENS_CONTENT_REFERENCE_MODULE,
-            referenceModuleInitData: referenceModuleInitData,
-            sig: postSignature
+            referenceModuleInitData: referenceModuleInitData
         });
-        lensHub.postWithSig(vars);
+
+        console.log('COLLECT MODULE AFFTER CRATEA: ', newService.collectModule);
+
+        uint256 pubId = lensHub.post(vars);
+        console.log('Profile ID to publish: ', addressToLensProfileId[msg.sender]);
+        console.log("PubID: ", pubId);
         services.push(newService);
         serviceIdToWaitlist[serviceId].initialize();
         serviceIdToService[serviceId] = newService;
         serviceIDToMarketID[serviceId] = marketId;
+        serviceIdToPublicationId[serviceId] = pubId;
         emit ServiceCreated(serviceId);
 
         return serviceId;
@@ -229,12 +252,13 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
      * @param serviceId The id of the service to purchase
      * @param referral The referrer of the contract
      */
-    function purchaseServiceOffering(uint256 serviceId, address referral) public notServiceOwner returns(uint) {
+    function purchaseServiceOffering(
+        uint256 serviceId, 
+        address referral,
+        DataTypes.EIP712Signature calldata sig
+        ) public notServiceOwner returns(uint) {
         NetworkLibrary.Service memory service = serviceIdToService[serviceId];
-        uint256 serviceWaitlistSize = getWaitlistLength(serviceId);
-
-        require(serviceWaitlistSize < service.maxSize, "max waitlist reached");
-
+console.log('COLLECT MODULE UMM: ', service.collectModule);
         _claimedServiceCounter++;
         purchasedServiceIdToMetdata[_claimedServiceCounter] = NetworkLibrary.PurchasedServiceMetadata({
             exist: true,
@@ -244,13 +268,24 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
             purchaseId: _claimedServiceCounter
         });
 
+        serviceIdToPurchaseId[serviceId] = _claimedServiceCounter;
         serviceIdToWaitlist[serviceId].enqueue(_claimedServiceCounter);
-        
-        _dai.approve(address(this), service.wad);
-        require(_dai.transfer(address(this), service.wad), "dai transfer");
+        console.log('purchaseServiceOffering::addressToLensProfileId[serviceId]',addressToLensProfileId[service.owner]);
+        console.log('AAAA: ', service.owner);
+        console.log('Service Owner: ', addressToLensProfileId[service.owner]);
+        //bytes processCollectData = abi.encodePacked('');
+        console.log('purchaseServiceOffering::serviceIdToPublicationId[serviceId]', serviceIdToPublicationId[serviceId]);
+       DataTypes.CollectWithSigData memory collectWithSigData = DataTypes.CollectWithSigData({
+            collector: msg.sender,
+            profileId: addressToLensProfileId[service.owner],
+            pubId: serviceIdToPublicationId[serviceId],
+            data: abi.encode(0),
+            sig: sig
+       });
 
-        emit ServicePurchased(_claimedServiceCounter, serviceId, msg.sender, referral);
+        lensHub.collectWithSig(collectWithSigData);
 
+        emit ServicePurchased(_claimedServiceCounter, serviceIdToPublicationId[serviceId], serviceId, service.owner, msg.sender, referral);
         return _claimedServiceCounter;
     }
 
@@ -265,29 +300,14 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
         require(metadata.client == msg.sender, "only client");
         require(metadata.exist == true, "service doesn't exist");
 
-        uint256 networkFee;
-        uint256 payout = service.wad;
-        if (metadata.referral != address(0)) {
-            uint256 referralShare = payout - service.referralShare;
-            _dai.transfer(metadata.referral, service.referralShare);
-            
-            //TODO change network fee
-            networkFee = (payout * 1);
-        } else {
-            //TODO change network fee
-            networkFee = payout * 1;
-        }
-    
-        uint256 ownerPayout = payout - networkFee;
-        _dai.transfer(service.owner, ownerPayout); //transfer dai from escrow to client
-        _dai.transfer(treasury, networkFee); //transfer dai to gig earth treasruy
-
         //remove from waitlist
         if (serviceIdToWaitlist[serviceId].peekLast() == purchaseId) {
             serviceIdToWaitlist[serviceId].dequeue();
         } else {
             serviceIdToWaitlist[serviceId].dequeueById(purchaseId);
         }
+        console.log('COLLECT MODULE: ', service.collectModule);
+        IServiceCollectModule(service.collectModule).releaseCollectedFunds(addressToLensProfileId[service.owner], serviceIdToPublicationId[service.id]);
     }
 
     ///////////////////////////////////////////// Gig Functions
@@ -617,13 +637,6 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
     }
 
     /**
-     * Set max waitlist size for any service
-     * @param serviceId The id of the service
-     * @param newMaxWaitlistSize The desired size of the waitlist for a given service
-     */
-    function setMaxWaitlistSize(uint256 serviceId, uint256 newMaxWaitlistSize) public onlyOwnerOrDispatcherOfLensProfileId {}
-
-    /**
      */
     function setProtocolFee(uint256 protocolFee) external onlyGovernance {
         _protocolFee = protocolFee;
@@ -669,11 +682,19 @@ contract NetworkManager is Ownable, Initializable, IArbitrable, IEvidence {
         return serviceIdToWaitlist[serviceId].length();
     }
 
-    function getProtocolFee() external view onlyOwner returns(uint) {
+    function getProtocolFee() external view returns(uint) {
         return _protocolFee;
     }
 
     function getLensProfileIdFromAddress(address account) public view returns(uint) {
         return addressToLensProfileId[account];
+    }
+
+    function getPubIdFromServiceId(uint256 serviceId) public view returns(uint) {
+        return serviceIdToPublicationId[serviceId];
+    }
+
+    function getPurchaseIdFromServiceId(uint256 serviceId) public view returns(uint) {
+        return serviceIdToPurchaseId[serviceId];
     }
 }
