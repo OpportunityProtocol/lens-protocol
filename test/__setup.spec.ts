@@ -48,7 +48,6 @@ import {
   TimedFeeCollectModule,
   TimedFeeCollectModule__factory,
   TransparentUpgradeableProxy__factory,
-  RelationshipFollowModule__factory,
   SimpleCentralizedArbitrator__factory,
   LensPeriphery,
   LensPeriphery__factory,
@@ -64,8 +63,6 @@ import {
   MultiAction__factory,
   InterestManagerCompound__factory,
   ServiceToken__factory,
-  ProxyAdmin__factory,
-  AdminUpgradeabilityProxy__factory,
   TestERC20__factory,
   TestComptroller__factory,
   TestCDai__factory,
@@ -87,7 +84,6 @@ import {
   NetworkManager__factory,
   GigEarthContentReferenceModule,
   NetworkManager,
-  GigEarthContentReferenceModule__factory,
   ServiceCollectModule,
   ServiceCollectModule__factory,
 } from '../typechain-types';
@@ -342,8 +338,6 @@ before(async function () {
   multiAction = await new MultiAction__factory(deployer).deploy(ideaTokenExchange.address, ideaTokenFactory.address, tokenVault.address, dai.address, uniswapV2Router02.address, wEth.address)
   await multiAction.deployed()
 
-  await gigEarth.initialize(ideaTokenFactory.address, adminAccountAddress, simpleArbitrator.address, lensHub.address,ZERO_ADDRESS, adminAccountAddress, dai.address)
-
   await interestManagerCompound
     .connect(adminAccount)
     .initialize(ideaTokenExchange.address, dai.address, cDai.address, comp.address, oneAddress)
@@ -362,7 +356,6 @@ before(async function () {
       dai.address
     )
 
-
   await ideaTokenExchange.connect(adminAccount).setTokenFactoryAddress(ideaTokenFactory.address)
   
   // LensPeriphery
@@ -371,6 +364,9 @@ before(async function () {
 
   // Currency
   currency = await new Currency__factory(deployer).deploy();
+
+  moduleGlobals.connect(governance).whitelistCurrency(currency.address, true)
+  await gigEarth.initialize(ideaTokenFactory.address, adminAccountAddress, simpleArbitrator.address, lensHub.address,ZERO_ADDRESS, adminAccountAddress, currency.address)
 
   // Modules
   serviceCollectModule = await new ServiceCollectModule__factory(deployer).deploy(lensHub.address, moduleGlobals.address, gigEarth.address)

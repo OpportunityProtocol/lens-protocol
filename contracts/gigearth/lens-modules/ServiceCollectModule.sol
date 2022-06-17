@@ -10,6 +10,7 @@ import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import {SafeERC20} from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import {IERC721} from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import {DataTypes} from '../../libraries/DataTypes.sol';
+import "hardhat/console.sol";
 
 /**
  * @notice A struct containing the necessary data to execute collect actions on a publication.
@@ -143,7 +144,10 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
         address currency = _dataByPublicationByProfile[profileId][pubId].currency;
         _validateDataIsExpected(data, currency, amount);
 
-         IERC20(currency).safeTransferFrom(collector, address(this), _dataByPublicationByProfile[profileId][pubId].amount);
+        console.log("I want to spend this: ", amount);
+        console.log("Transfer from: ", collector);
+        console.log("To: ", address(this));
+        IERC20(currency).safeTransferFrom(collector, address(this), _dataByPublicationByProfile[profileId][pubId].amount);
     }
 
     function releaseCollectedFunds(uint256 profileId, uint256 pubId) external onlyNetworkManager {
@@ -153,9 +157,10 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
         uint256 treasuryAmount = (amount * _lensTalentNetworkManager.getProtocolFee()) / BPS_MAX;
         uint256 adjustedAmount = amount - treasuryAmount;
 
-        IERC20(currency).safeTransferFrom(address(this), recipient, adjustedAmount);
-        if (treasuryAmount > 0)
-            IERC20(currency).safeTransferFrom(address(this), address(_lensTalentNetworkManager), treasuryAmount);
+        IERC20(currency).transfer(recipient, adjustedAmount);
+        if (treasuryAmount > 0) {
+            IERC20(currency).transfer(address(_lensTalentNetworkManager), treasuryAmount);
+        }
     }
 
     function emergencyReleaseDisputedFunds(uint256 profileId, uint256 pubId, address recipient) external onlyNetworkManager {

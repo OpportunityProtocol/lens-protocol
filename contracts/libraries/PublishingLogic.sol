@@ -137,7 +137,6 @@ library PublishingLogic {
         mapping(address => bool) storage _referenceModuleWhitelisted
     ) external {
         _pubByIdByProfile[profileId][pubId].contentURI = contentURI;
-
         // Collect module initialization
         bytes memory collectModuleReturnData = _initPubCollectModule(
             profileId,
@@ -308,15 +307,14 @@ library PublishingLogic {
             storage _pubByIdByProfile,
         mapping(address => bool) storage _collectModuleWhitelisted
     ) private returns (bytes memory) {
-        return new bytes(0);
-       /* if (!_collectModuleWhitelisted[collectModule]) revert Errors.CollectModuleNotWhitelisted();
+        if (!_collectModuleWhitelisted[collectModule]) revert Errors.CollectModuleNotWhitelisted();
         _pubByIdByProfile[profileId][pubId].collectModule = collectModule;
         return
             ICollectModule(collectModule).initializePublicationCollectModule(
                 profileId,
                 pubId,
                 collectModuleInitData
-            );*/
+            );
     }
 
     function _initPubReferenceModule(
@@ -328,8 +326,7 @@ library PublishingLogic {
             storage _pubByIdByProfile,
         mapping(address => bool) storage _referenceModuleWhitelisted
     ) private returns (bytes memory) {
-         return new bytes(0);
-       /* if (referenceModule == address(0)) return new bytes(0);
+        if (referenceModule == address(0)) return new bytes(0);
         if (!_referenceModuleWhitelisted[referenceModule])
             revert Errors.ReferenceModuleNotWhitelisted();
         _pubByIdByProfile[profileId][pubId].referenceModule = referenceModule;
@@ -338,7 +335,7 @@ library PublishingLogic {
                 profileId,
                 pubId,
                 referenceModuleInitData
-            );*/
+            );
     }
 
     function _initFollowModule(

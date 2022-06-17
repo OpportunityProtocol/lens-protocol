@@ -36,6 +36,18 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     event UserRegistered(address indexed registeredAddress, string indexed lensHandle);
 
     /**
+     * Emitted when a service is purchased
+     * 
+     * @param purchaseId The id of the purchase
+     * @param pubId The lens protocol publication id
+     * @param serviceId The id of the service
+     * @param owner The owner of the service
+     * @param purchaser The address purchasing the service
+     * @param referral The referral for the purchase, if any
+     */
+    event ServicePurchased(uint256 purchaseId, uint256 pubId, uint256 indexed serviceId, address indexed owner, address indexed purchaser, address referral);
+
+    /**
      * @dev To be emitted upon deploying a market
      */
     event MarketCreated(
@@ -58,9 +70,6 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      */
     event ServiceCreated(uint256 indexed serviceId);
 
-    /**
-     */
-    event ServicePurchased(uint256 purchaseId, uint256 pubId, uint256 indexed serviceId, address indexed serviceOwner, address indexed purchaser, address referral);
     IArbitrator public arbitrator;
     ILensHub public lensHub;
     IProfileCreator public proxyProfileCreator;
@@ -158,20 +167,21 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      * @param vars LensProtocol::DataTypes::CreateProfileData struct containing lenshub create profile data
      */
     function registerWorker(DataTypes.CreateProfileData calldata vars) external {
-        if (isRegisteredUser(msg.sender)) {
-            revert("Duplicate registration");
-        }
+        require(!isRegisteredUser(msg.sender), "duplicate registration");
 
-       // proxyProfileCreator.proxyCreateProfile(vars); //test
-        /* bytes memory b;
-        b = abi.encodePacked(vars.handle, ".test");
-        string memory registeredHandle = string(b);*/
-
-       lensHub.createProfile(vars); //prod
-
+        /************ TESTNET ONLY ***************/
+        proxyProfileCreator.proxyCreateProfile(vars);
         bytes memory b;
-        b = abi.encodePacked(vars.handle);
+        b = abi.encodePacked(vars.handle, ".test");
         string memory registeredHandle = string(b);
+        /************ END TESTNET ONLY ***************/
+
+        /************ MAINNET ONLY ***************/
+        //lensHub.createProfile(vars);
+        //bytes memory b;
+        //b = abi.encodePacked(vars.handle);
+        //string memory registeredHandle = string(b);
+        /************ END MAINNET ONLY ***************/
     
         addressToLensProfileId[msg.sender] = lensHub.getProfileIdByHandle(registeredHandle);
         console.log("Returned handle: ", lensHub.getProfileIdByHandle(registeredHandle));
@@ -205,7 +215,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     ) public returns(uint) {
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID(marketId);
         uint256 serviceId = _tokenFactory.addToken(marketDetails.name, marketDetails.id, msg.sender);
-    console.log('Service ID: ', serviceId);
+
         //create service
         NetworkLibrary.Service memory newService = NetworkLibrary.Service({
             marketId: marketId,
@@ -221,7 +231,6 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         bytes memory collectModuleInitData = abi.encode(wad, address(_dai), msg.sender, referralSharePayout, serviceId);
         bytes memory referenceModuleInitData = abi.encode(newService);
 
-        console.log(addressToLensProfileId[msg.sender]);
         //create lens post
         DataTypes.PostData memory vars = DataTypes.PostData({
             profileId: addressToLensProfileId[msg.sender],
@@ -231,12 +240,8 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
             referenceModule: LENS_CONTENT_REFERENCE_MODULE,
             referenceModuleInitData: referenceModuleInitData
         });
-
-        console.log('COLLECT MODULE AFFTER CRATEA: ', newService.collectModule);
-
         uint256 pubId = lensHub.post(vars);
-        console.log('Profile ID to publish: ', addressToLensProfileId[msg.sender]);
-        console.log("PubID: ", pubId);
+
         services.push(newService);
         serviceIdToWaitlist[serviceId].initialize();
         serviceIdToService[serviceId] = newService;
@@ -258,7 +263,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         DataTypes.EIP712Signature calldata sig
         ) public notServiceOwner returns(uint) {
         NetworkLibrary.Service memory service = serviceIdToService[serviceId];
-console.log('COLLECT MODULE UMM: ', service.collectModule);
+
         _claimedServiceCounter++;
         purchasedServiceIdToMetdata[_claimedServiceCounter] = NetworkLibrary.PurchasedServiceMetadata({
             exist: true,
@@ -270,18 +275,15 @@ console.log('COLLECT MODULE UMM: ', service.collectModule);
 
         serviceIdToPurchaseId[serviceId] = _claimedServiceCounter;
         serviceIdToWaitlist[serviceId].enqueue(_claimedServiceCounter);
-        console.log('purchaseServiceOffering::addressToLensProfileId[serviceId]',addressToLensProfileId[service.owner]);
-        console.log('AAAA: ', service.owner);
-        console.log('Service Owner: ', addressToLensProfileId[service.owner]);
-        //bytes processCollectData = abi.encodePacked('');
-        console.log('purchaseServiceOffering::serviceIdToPublicationId[serviceId]', serviceIdToPublicationId[serviceId]);
-       DataTypes.CollectWithSigData memory collectWithSigData = DataTypes.CollectWithSigData({
+        bytes memory processCollectData = abi.encode(address(_dai), service.wad);
+
+        DataTypes.CollectWithSigData memory collectWithSigData = DataTypes.CollectWithSigData({
             collector: msg.sender,
             profileId: addressToLensProfileId[service.owner],
             pubId: serviceIdToPublicationId[serviceId],
-            data: abi.encode(0),
+            data: processCollectData,
             sig: sig
-       });
+        });
 
         lensHub.collectWithSig(collectWithSigData);
 
@@ -306,7 +308,7 @@ console.log('COLLECT MODULE UMM: ', service.collectModule);
         } else {
             serviceIdToWaitlist[serviceId].dequeueById(purchaseId);
         }
-        console.log('COLLECT MODULE: ', service.collectModule);
+
         IServiceCollectModule(service.collectModule).releaseCollectedFunds(addressToLensProfileId[service.owner], serviceIdToPublicationId[service.id]);
     }
 
@@ -331,8 +333,6 @@ console.log('COLLECT MODULE UMM: ', service.collectModule);
         uint256 relationshipID = relationships.length - 1;
         relationshipIDToRelationship[relationshipID] = relationship;
         relationshipIDToMarketID[relationshipID] = marketId;
-
-        console.log('@@@@: ', relationshipIDToRelationship[relationshipID].employer);
 
         emit ContractCreated();
         return relationshipID;
@@ -375,7 +375,6 @@ console.log('COLLECT MODULE UMM: ', service.collectModule);
         _releaseContractFunds(relationship.wad, contractId);
         relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
 
-        //emit ContractResolved(contractId, solutionMetadataPtr);
         emit ContractOwnershipUpdate();
     }
 
