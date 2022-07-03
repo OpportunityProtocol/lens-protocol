@@ -115,6 +115,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
                 "invalid-params");
 
         uint marketID = ++_numMarkets;
+        console.log(_numMarkets);
         console.log("Created market id with: ", marketID);
         MarketInfo storage info = _marketInfo[marketName];
 
@@ -170,11 +171,13 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
        // require(isValidTokenName(tokenName, marketID), "invalid-name");
         console.log("TB");
         IServiceToken serviceToken = IServiceToken(address(new MinimalProxy(_tokenLogic)));
+        console.log("Storing token with address: ", address(serviceToken));
+        console.log("Storing amrket id: ", marketID);
         _tokenAddressToMarketID[address(serviceToken)] = marketID;
         console.log("Service token address: ", address(serviceToken));
         serviceToken.initialize(string(abi.encodePacked( _marketDetails[marketID].name, ": ", tokenName)), _tokenExchange);
         console.log("TC");
-        uint tokenID = ++ _marketDetails[marketID].numTokens;
+        uint tokenID = ++_marketDetails[marketID].numTokens;
         TokenInfo memory tokenInfo = TokenInfo({
             exists: true,
             id: tokenID,
@@ -346,6 +349,8 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     }
 
     function getMarketIDByTokenAddress(address tokenAddress) external virtual view override returns(uint) {
+        console.log("The token address: ", tokenAddress);
+        console.log("Trying to return, ", _tokenAddressToMarketID[tokenAddress]);
         return _tokenAddressToMarketID[tokenAddress];
     }
 }

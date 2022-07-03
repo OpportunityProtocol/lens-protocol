@@ -2,11 +2,11 @@ const balance = '1000000000000000000000000';
 
 export const accounts = [
   {
-    secretKey: 'd02a9240afb4ae74876caaecfad354f17de1e02ca4febc6459522a990189b112',/*'0xc5e8f61d1ab959b397eecc0a37a6517b8e67a0e7cf1f4bce5591f3ed80199122',*/
+    secretKey: '21424d46d0d28df75892f2fad71b0a8c6e6773983e65c9d387e245c8d8ac14e9', //'d02a9240afb4ae74876caaecfad354f17de1e02ca4febc6459522a990189b112',/*'0xc5e8f61d1ab959b397eecc0a37a6517b8e67a0e7cf1f4bce5591f3ed80199122',*/
     balance,
   },
   {
-    secretKey: '0xd49743deccbccc5dc7baa8e69e5be03298da8688a15dd202e20f15d5e0e9a9fb',
+    secretKey: '371cd9fa601c29869b3bb964fa0f0a5c8a26388e0307df26ddced5306139b04a', //'0xd49743deccbccc5dc7baa8e69e5be03298da8688a15dd202e20f15d5e0e9a9fb',
     balance,
   },
   {

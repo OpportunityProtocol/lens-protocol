@@ -21,12 +21,13 @@ import "hardhat/console.sol";
  * @param referralFee The referral fee associated with this publication.
  * @param followerOnly Whether only followers should be able to collect.
  */
-struct ProfilePublicationData {
+struct PaymentProcessingData {
     uint256 amount;
     address currency;
     address recipient;
     uint16 referralFee;
     uint256 serviceId;
+    uint256[] packages;
 }
 
 interface INetworkManager {
@@ -44,8 +45,10 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
 
     INetworkManager _lensTalentNetworkManager;
 
-    mapping(uint256 => mapping(uint256 => ProfilePublicationData))
+    mapping(uint256 => mapping(uint256 => PaymentProcessingData))
         internal _dataByPublicationByProfile;
+
+    mapping(address => mapping(address => bool)) _ownerToClientToRelationshipConfirmation;
 
     modifier onlyNetworkManager {
         require(msg.sender == address(_lensTalentNetworkManager), "only network manager");
@@ -76,25 +79,27 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
         bytes calldata data
     ) external override onlyHub returns (bytes memory) {
         (
-            uint256 amount,
+            uint256[] memory amount,
             address currency,
             address recipient,
             uint16 referralFee,
             uint256 serviceId
-        ) = abi.decode(data, (uint256, address, address, uint16, uint256));
+        ) = abi.decode(data, (uint256[], address, address, uint16, uint256));
         if (
             !_currencyWhitelisted(currency) ||
             recipient == address(0) ||
             referralFee > BPS_MAX ||
-            amount == 0
+            amount[0] == 0 ||
+            amount[1] == 0 ||
+            amount[2] == 0
         ) revert Errors.InitParamsInvalid();
 
-        _dataByPublicationByProfile[profileId][pubId].amount = amount;
+        _dataByPublicationByProfile[profileId][pubId].packages = amount;
+        _dataByPublicationByProfile[profileId][pubId].amount = amount[0];
         _dataByPublicationByProfile[profileId][pubId].currency = currency;
         _dataByPublicationByProfile[profileId][pubId].recipient = recipient;
         _dataByPublicationByProfile[profileId][pubId].referralFee = referralFee;
         _dataByPublicationByProfile[profileId][pubId].serviceId = serviceId;
-
         return data;
     }
 
@@ -118,18 +123,18 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
     }
 
     /**
-     * @notice Returns the publication data for a given publication, or an empty struct if that publication was not
+     * @notice Returns the payment processing data for a given publication, or an empty struct if that publication was not
      * initialized with this module.
      *
      * @param profileId The token ID of the profile mapped to the publication to query.
      * @param pubId The publication ID of the publication to query.
      *
-     * @return ProfilePublicationData The ProfilePublicationData struct mapped to that publication.
+     * @return PaymentProcessingData The PaymentProcessingData struct mapped to that publication.
      */
-    function getPublicationData(uint256 profileId, uint256 pubId)
+    function getPaymentProcessingData(uint256 profileId, uint256 pubId)
         external
         view
-        returns (ProfilePublicationData memory)
+        returns (PaymentProcessingData memory)
     {
         return _dataByPublicationByProfile[profileId][pubId];
     }
@@ -142,16 +147,18 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
     ) internal {
         uint256 amount = _dataByPublicationByProfile[profileId][pubId].amount;
         address currency = _dataByPublicationByProfile[profileId][pubId].currency;
+
+        (address decodedCurrency, uint256 decodedAmount, uint8 decodedPackage) = abi.decode(data, (address, uint256, uint8));
+
         _validateDataIsExpected(data, currency, amount);
 
-        console.log("I want to spend this: ", amount);
-        console.log("Transfer from: ", collector);
-        console.log("To: ", address(this));
-        IERC20(currency).safeTransferFrom(collector, address(this), _dataByPublicationByProfile[profileId][pubId].amount);
+        uint256 fee = _dataByPublicationByProfile[profileId][pubId].packages[decodedPackage];
+
+        IERC20(currency).safeTransferFrom(collector, address(this), fee);
     }
 
-    function releaseCollectedFunds(uint256 profileId, uint256 pubId) external onlyNetworkManager {
-        uint256 amount = _dataByPublicationByProfile[profileId][pubId].amount;
+    function releaseCollectedFunds(uint256 profileId, uint256 pubId, uint8 package) external onlyNetworkManager {
+        uint256 amount = _dataByPublicationByProfile[profileId][pubId].packages[package];
         address currency = _dataByPublicationByProfile[profileId][pubId].currency;
         address recipient = _dataByPublicationByProfile[profileId][pubId].recipient;
         uint256 treasuryAmount = (amount * _lensTalentNetworkManager.getProtocolFee()) / BPS_MAX;
@@ -161,19 +168,26 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
         if (treasuryAmount > 0) {
             IERC20(currency).transfer(address(_lensTalentNetworkManager), treasuryAmount);
         }
+
+        //TODO: Proof owner to client relationship
+        // _ownerToClientToRelationshipConfirmation[]
     }
 
-    function emergencyReleaseDisputedFunds(uint256 profileId, uint256 pubId, address recipient) external onlyNetworkManager {
-        uint256 amount = _dataByPublicationByProfile[profileId][pubId].amount;
+    function emergencyReleaseDisputedFunds(uint256 profileId, uint256 pubId, address recipient, uint8 package) external onlyNetworkManager {
+        uint256 amount = _dataByPublicationByProfile[profileId][pubId].packages[package];
         address currency = _dataByPublicationByProfile[profileId][pubId].currency;
         address recipient = _dataByPublicationByProfile[profileId][pubId].recipient;
         uint256 treasuryAmount = (amount * _lensTalentNetworkManager.getProtocolFee()) / BPS_MAX;
         uint256 adjustedAmount = amount - treasuryAmount;
 
         IERC20(currency).safeTransferFrom(address(this), recipient, adjustedAmount);
-        if (treasuryAmount > 0)
+        if (treasuryAmount > 0) {
             IERC20(currency).safeTransferFrom(address(this), address(_lensTalentNetworkManager), treasuryAmount);
+        }
     }
+
+        function getServiceCo(uint256 profileId, uint256 pubId, address recipient, uint8 package) external onlyNetworkManager {
+        }
 
     function _processCollectWithReferral(
         uint256 referrerProfileId,

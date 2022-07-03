@@ -25,12 +25,12 @@ import {
   ProfileFollowModule__factory,
   RevertFollowModule__factory,
   ProfileCreationProxy__factory,
-  ControlledERC20__factory,
   InterestManagerAave__factory,
   TokenExchange__factory,
   TokenFactory__factory,
   ServiceToken__factory,
   NetworkManager__factory,
+  ServiceCollectModule__factory,
 } from '../typechain-types';
 import { deployContract, ProtocolState, waitForTx, ZERO_ADDRESS } from './helpers/utils';
 
@@ -43,7 +43,7 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   // production.
   const ethers = hre.ethers;
   const accounts = await ethers.getSigners();
-  const deployer = accounts[0];
+  const deployer = accounts[4];
   const governance = accounts[1];
   const treasuryAddress = accounts[2].address;
   const proxyAdminAddress = deployer.address;
@@ -128,7 +128,7 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   );
 
   // Connect the hub proxy to the LensHub factory and the governance for ease of use.
-  const lensHub = LensHub__factory.connect(proxy.address, governance);
+  const lensHub = await LensHub__factory.connect(proxy.address, governance)
 
   console.log('\n\t-- Deploying Lens Periphery --');
   const lensPeriphery = await new LensPeriphery__factory(deployer).deploy(lensHub.address, {
@@ -139,6 +139,39 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   console.log('\n\t-- Deploying Currency --');
   const currency = await deployContract(
     new Currency__factory(deployer).deploy({ nonce: deployerNonce++ })
+  );
+
+  // Deploy lesn talent
+  console.log('\n\t-- Deploying Lens Talent Contracts --');
+
+  const interestManagerAave = await deployContract(
+    new InterestManagerAave__factory(deployer).deploy({
+      nonce: deployerNonce++,
+    })
+  );
+
+  const tokenExchange = await deployContract(
+    new TokenExchange__factory(deployer).deploy({
+      nonce: deployerNonce++,
+    })
+  );
+
+  const tokenFactory = await deployContract(
+    new TokenFactory__factory(deployer).deploy({
+      nonce: deployerNonce++,
+    })
+  );
+
+  const tokenLogic = await deployContract(
+    new ServiceToken__factory(deployer).deploy({
+      nonce: deployerNonce++,
+    })
+  );
+
+  const networkManager = await deployContract(
+    new NetworkManager__factory(deployer).deploy({
+      nonce: deployerNonce++,
+    })
   );
 
   // Deploy collect modules
@@ -197,6 +230,16 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
       nonce: deployerNonce++,
     })
   );
+  const serviceCollectModule = await deployContract(
+    new ServiceCollectModule__factory(deployer).deploy(
+      lensHub.address,
+      moduleGlobals.address,
+      networkManager.address,
+      {
+        nonce: deployerNonce++,
+      }
+    )
+  );
   // --- COMMENTED OUT AS THIS IS NOT A LAUNCH MODULE ---
   // console.log('\n\t-- Deploying approvalFollowModule --');
   // const approvalFollowModule = await deployContract(
@@ -254,6 +297,9 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   await waitForTx(
     lensHub.whitelistCollectModule(freeCollectModule.address, true, { nonce: governanceNonce++ })
   );
+  await waitForTx(
+    lensHub.connect(governance).whitelistCollectModule(serviceCollectModule.address, true, { nonce: governanceNonce++ })
+  );
 
   // Whitelist the follow modules
   console.log('\n\t-- Whitelisting Follow Modules --');
@@ -292,48 +338,44 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     })
   );
 
-  const networkManager = await deployContract(
-    new NetworkManager__factory(deployer).deploy()
-  )
-
   await waitForTx(
     lensHub.whitelistProfileCreator(networkManager.address, true, {
-      nonce: governanceNonce++
+      nonce: governanceNonce++,
     })
-  )
+  );
 
-  const admin = '0x34505b14DbFC50253efd4902FD3DbcB3CF620258'
-  const aDaiAddress = '0xDD4f3Ee61466C4158D394d57f3D4C397E91fBc51'
-  const aavePool = '0x6C9fB0D5bD9429eb9Cd96B85B81d872281771E6B'
+  const aDaiAddress = '0xDD4f3Ee61466C4158D394d57f3D4C397E91fBc51';
+  const aavePool = '0x6C9fB0D5bD9429eb9Cd96B85B81d872281771E6B';
   //const lensHub = '0x60Ae865ee4C725cd04353b5AAb364553f56ceF82'
 
-  // Lens Talent
-  const controlledERC20 = await deployContract(
-    new ControlledERC20__factory(deployer).deploy('DAI', 'DAI')
-  )
+  const admin = await ethers.getSigners()[0]
+  const aPolygonMainnetDaiAddress = '0x82E64f49Ed5EC1bC6e43DAD4FC8Af9bb3A2312EE'
+  const aPolygonMainnetPool = '0x794a61358D6845594F94dc1DB02A252b5b4814aD'
 
-  const interestManagerAave = await deployContract(
-    new InterestManagerAave__factory(deployer).deploy()
-  )
+  await lensHub.setState(ProtocolState.Unpaused);
 
-  const tokenExchange = await deployContract(
-    new TokenExchange__factory(deployer).deploy()
-  )
+  await currency.connect(deployer).mint(deployer.address, 10000);
+  await interestManagerAave
+    .connect(deployer)
+    .initialize(networkManager.address, currency.address, aDaiAddress, aavePool);
+  await tokenFactory
+    .connect(deployer)
+    .initialize(admin, tokenExchange.address, tokenLogic.address, networkManager.address);
+  await tokenExchange
+    .connect(deployer)
+    .initialize(admin, admin, admin, tokenFactory.address, interestManagerAave.address, currency.address);
+  await networkManager
+    .connect(deployer)
+    .initialize(
+      tokenFactory.address,
+      networkManager.address,
+      admin,
+      lensHub.address,
+      profileCreationProxy.address,
+      admin,
+      currency.address
+    );
 
-  const tokenFactory = await deployContract(
-    new TokenFactory__factory(deployer).deploy()
-  )
-
-  const tokenLogic = await deployContract(
-    new ServiceToken__factory(deployer).deploy()
-  )
-
-  await ControlledERC20__factory.connect(deployer.address, deployer).mint(deployer.address, 10000)
-  await InterestManagerAave__factory.connect(deployer.address, deployer).initialize(networkManager.address, controlledERC20.address, aDaiAddress, aavePool)
-  await TokenFactory__factory.connect(deployer.address, deployer).initialize(admin, tokenExchange.address, tokenLogic.address, networkManager.address)
-  await TokenExchange__factory.connect(deployer.address, deployer).initialize(admin, admin, admin, interestManagerAave.address, controlledERC20.address)
-  await NetworkManager__factory.connect(deployer.address, deployer).initialize(admin, tokenFactory.address, admin, admin, lensHub.address, admin, controlledERC20.address)
-  console.log(deployer)
   // Save and log the addresses
   const addrs = {
     'lensHub proxy': lensHub.address,
@@ -359,15 +401,20 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     'follower only reference module': followerOnlyReferenceModule.address,
     'UI data provider': uiDataProvider.address,
     'Profile creation proxy': profileCreationProxy.address,
-    'Interest Manager Aave: ':  interestManagerAave.address,
-    'Token Factory: ':  tokenFactory.address,
-    'Token Exchange: ':  tokenExchange.address,
+    'Interest Manager Aave: ': interestManagerAave.address,
+    'Token Factory: ': tokenFactory.address,
+    'Token Exchange: ': tokenExchange.address,
     'Network Manager: ': networkManager.address,
     'Token Logic: ': tokenLogic.address,
-    'DAI: ': controlledERC20.address
+    'Service Collect Module: ': serviceCollectModule.address,
   };
   const json = JSON.stringify(addrs, null, 2);
-  console.log(json);
+  console.log(addrs);
+
+  console.log(
+    'Whitelitsted?: ',
+    await lensHub.isCollectModuleWhitelisted(serviceCollectModule.address)
+  );
 
   fs.writeFileSync('addresses.json', json, 'utf-8');
 });

@@ -22,7 +22,7 @@ interface ITokenExchange {
     function getPricesForSellingTokens(MarketDetails memory marketDetails, uint supply, uint amount, bool feesDisabled) external pure returns (CostAndPriceAmounts memory);
     function buyTokens(address serviceToken, uint amount, uint fallbackAmount, uint cost, address recipient) external;
     function getCostForBuyingTokens(address serviceToken, uint amount) external view returns (uint);
-    function getCostsForBuyingTokens(MarketDetails memory marketDetails, uint supply, uint amount, bool feesDisabled) external pure returns (CostAndPriceAmounts memory);
+    function getCostsForBuyingTokens(MarketDetails memory marketDetails, uint supply, uint amount, bool feesDisabled) external view returns (CostAndPriceAmounts memory);
     function setTokenOwner(address serviceToken, address owner) external;
     function setPlatformOwner(uint marketID, address owner) external;
     function withdrawTradingFee() external;

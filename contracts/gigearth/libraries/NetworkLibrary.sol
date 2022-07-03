@@ -48,7 +48,7 @@ library NetworkLibrary {
         uint256 marketId;
         address owner;
         string metadataPtr;
-        uint256 wad;
+        uint256[] wad;
         uint256 referralShare;
         bool exist;
         uint256 id;
@@ -100,11 +100,19 @@ library NetworkLibrary {
         Milestone
     }
 
+    enum ServiceResolutionStatus {
+        PENDING,
+        PENDING_DISPUTE,
+        RESOLVED
+    }
+
     struct PurchasedServiceMetadata {
         uint256 purchaseId;
         address client;
         bool exist;
         uint256 timestampPurchased;
         address referral;
+        uint8 package;
+        ServiceResolutionStatus status;
     }
 }

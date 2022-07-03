@@ -16,6 +16,7 @@ import {LensMultiState} from './base/LensMultiState.sol';
 import {LensHubStorage} from './storage/LensHubStorage.sol';
 import {VersionedInitializable} from '../upgradeability/VersionedInitializable.sol';
 import {IERC721Enumerable} from '@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol';
+import "hardhat/console.sol";
 /**
  * @title LensHub
  * @author Lens Protocol
@@ -146,7 +147,9 @@ contract LensHub is LensNFTBase, VersionedInitializable, LensMultiState, LensHub
         whenNotPaused
         returns (uint256)
     {
+        console.log(" ABaby");
         if (!_profileCreatorWhitelisted[msg.sender]) revert Errors.ProfileCreatorNotWhitelisted();
+               console.log(" BBaby");
         unchecked {
             uint256 profileId = ++_profileCounter;
             _mint(vars.to, profileId);

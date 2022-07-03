@@ -17,7 +17,7 @@ import {
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { getCollectWithSigParts, getPostWithSigParts, getSetDispatcherWithSigParts, ProtocolState } from '../helpers/utils';
 import { CreateProfileDataStruct, SetDispatcherWithSigDataStruct, PostWithSigDataStruct, EIP712SignatureStruct } from '../../typechain-types/LensHub';
-import { MAX_UINT256 } from '../helpers/constants';
+import { MAX_UINT256, ZERO_ADDRESS } from '../helpers/constants';
 import { RelationshipStruct } from '../../typechain-types/NetworkManager';
 import { ethers } from 'hardhat';
 
@@ -30,22 +30,25 @@ describe("Users", async function () {
     });
 
     context('Users', function () {
-    /*  it("user should be able to register as a worker and create a profile through lens protocol", async () => {
-        //create worker profile
+     it("user should be able to register as a worker and create a profile through lens protocol", async () => {
+      await lensHub.connect(governance).whitelistProfileCreator(gigEarth.address, true)  
+      //create worker profile
         const testWorkerProfileData: CreateProfileDataStruct = {
           to: await gigEarth.address,
           handle: "testworkerhandle",
           imageURI: 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
-          followModule: zeroAddress,
+          followModule: ZERO_ADDRESS,
           followModuleInitData: [],
           followNFTURI: 'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
         }
 
-        await expect(gigEarth.connect(worker).registerWorker(testWorkerProfileData)).to.not.be.reverted;
+        await gigEarth.connect(worker).registerWorker(testWorkerProfileData, {
+          gasLimit: BigNumber.from('900000')
+        })
         const workerProfileId = await lensHub.getProfileIdByHandle('testworkerhandle')
 
-        await expect(lensHub.getProfileIdByHandle('testworkerhandle')).to.equal(workerProfileId)
-      })*/
+        await expect(await lensHub.getProfileIdByHandle('testworkerhandle')).to.equal(Number(workerProfileId))
+      })
 
       //TODO: Add to next test case
     /*  it("user should be able to deposit service creation payout in escrow", async () => {
@@ -148,7 +151,7 @@ describe("Users", async function () {
         const createServiceTx = await gigEarth.connect(worker).createService(
           marketID,
           'https://ipfs.fleek.co/ipfs/ghostplantghostplantghostplantghostplantghostplantghostplan',
-          100,
+          [100, 100, 100],
           100,
           serviceCollectModule.address
         )
@@ -158,9 +161,10 @@ describe("Users", async function () {
         const servicePubId = await gigEarth.getPubIdFromServiceId(1)
         const collectWithSigData = await getCollectWithSigParts(workerProfileId, String(servicePubId), [], employerNonce, '0')
         const purchaseId = await gigEarth.getPurchaseIdFromServiceId(1)
-        
+        const chosenPackage: number = 0
+
         await currency.connect(employer).approve(serviceCollectModule.address, BigNumber.from('100000'))
-        await gigEarth.connect(employer).purchaseServiceOffering(1, zeroAddress, {
+        await gigEarth.connect(employer).purchaseServiceOffering(1, zeroAddress, chosenPackage, {
           v: collectWithSigData.v,
           r: collectWithSigData.r,
           s: collectWithSigData.s,
@@ -174,8 +178,8 @@ describe("Users", async function () {
         const workerBalanceAfterResolution = Number(await currency.balanceOf(worker.address));
         const serviceData = await gigEarth.getServiceData(1);
         const protocolFee = Number(await gigEarth.getProtocolFee());
-        const treasuryPayout = (Number(serviceData.wad) * protocolFee / 10000)
-        const adjustedPayout = Number(serviceData.wad) - treasuryPayout;
+        const treasuryPayout = (Number(serviceData.wad[chosenPackage]) * protocolFee / 10000)
+        const adjustedPayout = Number(serviceData.wad[chosenPackage]) - treasuryPayout;
         const expectedBalanceAfterResolution = workerBalanceBeforeResolution + adjustedPayout
 
         expect(Math.round(workerBalanceAfterResolution)).equals(Math.round(expectedBalanceAfterResolution))
