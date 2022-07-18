@@ -19,9 +19,8 @@ interface IProfileCreator {
 }
 
 interface IServiceCollectModule {
-    function releaseCollectedFunds(uint256 profileId, uint256 pubId, uint8 package) external;
-    function emergencyReleaseDisputedFunds(uint256 profileId, uint256 pubId, address recipient, uint8 package) external;
-
+    function releaseCollectedFunds(uint256 profileId, uint256 pubId, uint8 offerIndex) external;
+    function emergencyReleaseDisputedFunds(uint256 profileId, uint256 pubId, address recipient, uint8 offerIndex) external;
 }
 
 contract NetworkManager is Initializable, IArbitrable, IEvidence {
@@ -36,11 +35,13 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     event UserRegistered(address indexed registeredAddress, string indexed lensHandle);
 
     /**
+     * Emitted when a new service is created
+     *
      * @param serviceId The id of the created service
      * @param marketId The id of the market
      * @param creator The creator of the service
      */
-    event ServiceCreated(uint256 indexed serviceId, uint256 indexed marketId, address indexed creator);
+    event ServiceCreated(uint256 indexed serviceId, uint256 indexed marketId, address indexed creator, uint256[] offers, string metadataPtr, uint256 pubId);
 
     /**
      * Emitted when a service is purchased
@@ -55,6 +56,8 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     event ServicePurchased(uint256 indexed serviceId, uint256 purchaseId, uint256 pubId,  address indexed owner, address indexed purchaser, address referral);
 
     /**
+     * Emitted whena  service is resolved
+     * 
      * @param serviceId The id of the service
      * @param purchaseId The id of the purchase
      * @param serviceOwner The owner of the service
@@ -64,24 +67,26 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     event ServiceResolved(address indexed serviceOwner, address indexed serviceClient, uint256 indexed purchaseId, uint256 serviceId, uint8 packageAmount);
 
     /**
-     * @param id The id of the market
-     * @param marketName The name of the market
+     * Emitted when a new worker is given permission to work the contract
+     * 
+     * @param id The id of the contract
+     * @param marketId The market id of the contract
+     * @param ownership The new contract status
+     * @param employer The address of the employer
+     * @param worker The address of the worker (if any)
      */
-    event MarketCreated(
-        uint256 indexed id,
-        string indexed marketName
-    );
+    event ContractOwnershipUpdate(uint256 indexed id, uint256 indexed marketId, NetworkLibrary.ContractOwnership indexed ownership, address employer, address worker);
 
     /**
-     * @dev To be emitted upon relationship ownership update
+     * Emitted when a new contract is created
+     * 
+     * @param id The ID of the contract
+     * @param creator The creator of the contract
+     * @param marketId The market the contract was deployed to
+     * @param metadataPtr The metadata hash on ipfs
      */
-    event ContractOwnershipUpdate();
-
-    /**
-     *
-     */
-    event ContractCreated();
-
+    event ContractCreated(uint256 id, address indexed creator, uint256 indexed marketId, string indexed metadataPtr);
+ 
     IArbitrator public arbitrator;
     ILensHub public lensHub;
     IProfileCreator public proxyProfileCreator;
@@ -182,22 +187,22 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     function registerWorker(DataTypes.CreateProfileData calldata vars) external {
         require(!isRegisteredUser(msg.sender), "duplicate registration");
         /************ TESTNET ONLY ***************/
-        //proxyProfileCreator.proxyCreateProfile(vars);
-        //bytes memory b;
-        //b = abi.encodePacked(vars.handle, ".test");
-        //string memory registeredHandle = string(b);
+        proxyProfileCreator.proxyCreateProfile(vars);
+        bytes memory b;
+        b = abi.encodePacked(vars.handle, ".test");
+        string memory registeredHandle = string(b);
         /************ END TESTNET ONLY ***************/
 
-        /************ MAINNET AND LOCAL ONLY ***************/
-        lensHub.createProfile(vars);
-        bytes memory b;
-        b = abi.encodePacked(vars.handle);
-        string memory registeredHandle = string(b);
-        /************ END MAINNET AND LOCAL ONLY ***************/
+        /************ MAINNET ***************/
+        // lensHub.createProfile(vars);
+        // bytes memory b;
+        // b = abi.encodePacked(vars.handle);
+        // string memory registeredHandle = string(b);
+        // /************ END MAINNET AND LOCAL ONLY ***************/
     
-        addressToLensProfileId[msg.sender] = lensHub.getProfileIdByHandle(registeredHandle);
-        verifiedFreelancers.push(msg.sender);
-        emit UserRegistered(msg.sender, vars.handle);
+         addressToLensProfileId[msg.sender] = lensHub.getProfileIdByHandle(registeredHandle);
+         verifiedFreelancers.push(msg.sender);
+         emit UserRegistered(msg.sender, vars.handle);
     }
 
     /**
@@ -215,56 +220,54 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      * Creates a service as well as deploys a new service token
      * @param marketId The market id the service belongs to
      * @param metadataPtr The ipfs hash for the metadata storage
-     * @param wad The cost of the service
+     * @param offers The cost of the service
      * @param referralSharePayout The share to payout to the referral address
      */
     function createService(
-        uint256 marketId, 
+        uint256 marketId,
         string calldata metadataPtr, 
-        uint256[] calldata wad, 
+        uint256[] calldata offers, 
         uint256 referralSharePayout,
         address lensTalentServiceCollectModule
     ) public returns(uint) {
+
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID(marketId);
         uint256 serviceId = _tokenFactory.addToken(marketDetails.name, marketDetails.id, msg.sender);
-        console.log("New service id: ", serviceId);
 
-        //create service
+        //create lens post
+        uint256 pubId = lensHub.post(DataTypes.PostData({
+            profileId: addressToLensProfileId[msg.sender],
+            contentURI: metadataPtr,
+            collectModule: lensTalentServiceCollectModule,
+            collectModuleInitData: abi.encode(offers, address(_dai), msg.sender, referralSharePayout, serviceId),
+            referenceModule: LENS_CONTENT_REFERENCE_MODULE,
+            referenceModuleInitData: abi.encode(serviceId)
+        }));
+
         NetworkLibrary.Service memory newService = NetworkLibrary.Service({
             marketId: marketId,
             owner: msg.sender,
             metadataPtr: metadataPtr,
-            wad: wad,
+            offers: offers,
             id: serviceId,
             exist: true,
             referralShare: referralSharePayout,
-            collectModule: lensTalentServiceCollectModule
-        });
-
-        console.log("After added: ", newService.id);
-
-        bytes memory collectModuleInitData = abi.encode(wad, address(_dai), msg.sender, referralSharePayout, serviceId);
-        bytes memory referenceModuleInitData = abi.encode(newService);
-
-        //create lens post
-        DataTypes.PostData memory vars = DataTypes.PostData({
-            profileId: addressToLensProfileId[msg.sender],
-            contentURI: metadataPtr,
             collectModule: lensTalentServiceCollectModule,
-            collectModuleInitData: collectModuleInitData,
-            referenceModule: LENS_CONTENT_REFERENCE_MODULE,
-            referenceModuleInitData: referenceModuleInitData
+            pubId: pubId
         });
-        uint256 pubId = lensHub.post(vars);
 
-        services.push(newService);
-        serviceIdToService[serviceId] = newService;
-        serviceIDToMarketID[serviceId] = marketId;
-        serviceIdToPublicationId[serviceId] = pubId;
-
-        emit ServiceCreated(serviceId, marketId, msg.sender);
+        storeService(newService);
         return serviceId;
     }
+
+    function storeService(NetworkLibrary.Service memory newService) internal {
+        services.push(newService);
+        serviceIdToService[newService.id] = newService;
+        serviceIDToMarketID[newService.id] = newService.marketId;
+        serviceIdToPublicationId[newService.id] = newService.pubId;
+        emit ServiceCreated(newService.id, newService.marketId, newService.owner, newService.offers, newService.metadataPtr, newService.pubId);
+    }
+
 
     /**
      * Purchases a service offering
@@ -274,7 +277,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     function purchaseServiceOffering(
         uint256 serviceId, 
         address referral,
-        uint8 package,
+        uint8 offerIndex,
         DataTypes.EIP712Signature calldata sig
         ) public notServiceOwner returns(uint) {
         NetworkLibrary.Service memory service = serviceIdToService[serviceId];
@@ -286,12 +289,12 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
             timestampPurchased: block.timestamp,
             referral: referral,
             purchaseId: _claimedServiceCounter,
-            package: package,
+            offer: offerIndex,
             status: NetworkLibrary.ServiceResolutionStatus.PENDING
         });
 
         serviceIdToPurchaseId[serviceId] = _claimedServiceCounter;
-        bytes memory processCollectData = abi.encode(address(_dai), service.wad[0], package);
+        bytes memory processCollectData = abi.encode(address(_dai), service.offers[0], offerIndex);
 
         DataTypes.CollectWithSigData memory collectWithSigData = DataTypes.CollectWithSigData({
             collector: msg.sender,
@@ -319,10 +322,10 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         require(metadata.client == msg.sender, "only client");
         require(metadata.exist == true, "service doesn't exist");
 
-        IServiceCollectModule(service.collectModule).releaseCollectedFunds(addressToLensProfileId[service.owner], serviceIdToPublicationId[service.id], metadata.package);
+        IServiceCollectModule(service.collectModule).releaseCollectedFunds(addressToLensProfileId[service.owner], serviceIdToPublicationId[service.id], metadata.offer);
         metadata.status = NetworkLibrary.ServiceResolutionStatus.RESOLVED;
 
-       emit ServiceResolved(service.owner, msg.sender, purchaseId, serviceId, metadata.package);
+       emit ServiceResolved(service.owner, msg.sender, purchaseId, serviceId, metadata.offer);
     }
 
     ///////////////////////////////////////////// Gig Functions
@@ -347,7 +350,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         relationshipIDToRelationship[relationshipID] = relationship;
         relationshipIDToMarketID[relationshipID] = marketId;
 
-        emit ContractCreated();
+        emit ContractCreated(relationshipID, msg.sender, marketId, taskMetadataPtr);
         return relationshipID;
     }
 
@@ -370,8 +373,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         relationship.contractOwnership = NetworkLibrary.ContractOwnership.Claimed;
 
         _initializeEscrowFundsAndTransfer(contractId);
-
-        emit ContractOwnershipUpdate();
+        emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Claimed, relationship.employer, newWorker);
     }
 
     /**
@@ -388,7 +390,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         _releaseContractFunds(relationship.wad, contractId);
         relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
 
-        emit ContractOwnershipUpdate();
+        emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Resolved, relationship.employer, relationship.worker);
     }
 
     /**
@@ -400,20 +402,20 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         require(relationship.contractOwnership == NetworkLibrary.ContractOwnership.Claimed);
 
         _surrenderFunds(contractId);
-        resetRelationshipState(relationship);
-
-        emit ContractOwnershipUpdate();
+        resetRelationshipState(contractId, relationship);
     }
 
     /**
      * Resets the contract state
      * @param contractStruct The contract struct 
      */
-    function resetRelationshipState(NetworkLibrary.Relationship storage contractStruct) internal {
+    function resetRelationshipState(uint256 contractId, NetworkLibrary.Relationship storage contractStruct) internal {
         contractStruct.worker = address(0);
         contractStruct.acceptanceTimestamp = 0;
         contractStruct.wad = 0;
         contractStruct.contractOwnership = NetworkLibrary.ContractOwnership.Unclaimed;
+
+        emit ContractOwnershipUpdate(contractId, contractStruct.marketId, NetworkLibrary.ContractOwnership.Unclaimed, contractStruct.employer, address(0));
     }
 
     /**
@@ -462,6 +464,8 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
             escrowDetails.status = NetworkLibrary.EscrowStatus.Resolved;
 
             relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
+
+            emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Resolved, relationship.employer, relationship.worker);
         } else {
             uint256 requiredAmount = arbitrator.arbitrationCost("");
             if (msg.value < requiredAmount) {
@@ -473,6 +477,8 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
             escrowDetails.status = NetworkLibrary.EscrowStatus.Reclaimed;
 
             relationship.contractOwnership = NetworkLibrary.ContractOwnership.Disputed;
+            
+            emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Disputed, relationship.employer, relationship.worker);
         }
     }
 
@@ -485,8 +491,9 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         external
         payable
     {
+        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
         NetworkLibrary.RelationshipEscrowDetails storage escrowDetails = relationshipIDToEscrowDetails[contractId];
-        //TODO: Require the sender to be the worker of the contract
+        require(msg.sender == relationship.worker, "depositArbitrationFeeForPayee::only worker");
 
         if (escrowDetails.status != NetworkLibrary.EscrowStatus.Reclaimed) {
             revert NetworkLibrary.InvalidStatus();

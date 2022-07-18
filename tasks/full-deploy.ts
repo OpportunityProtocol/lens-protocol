@@ -1,4 +1,5 @@
 import '@nomiclabs/hardhat-ethers';
+import { Signer } from 'ethers';
 import { hexlify, keccak256, RLP } from 'ethers/lib/utils';
 import fs from 'fs';
 import { task } from 'hardhat/config';
@@ -38,6 +39,14 @@ const TREASURY_FEE_BPS = 50;
 const LENS_HUB_NFT_NAME = 'Lens Protocol Profiles';
 const LENS_HUB_NFT_SYMBOL = 'LPP';
 
+const aavePolygonMainnetDaiAddress = '0x82E64f49Ed5EC1bC6e43DAD4FC8Af9bb3A2312EE'
+const aavePolygonMainnetPool = '0x794a61358D6845594F94dc1DB02A252b5b4814aD'
+const lensHubPolygonMainnetAddress = '0xDb46d1Dc155634FbC732f92E853b10B288AD5a1d'
+const polygonMainnetDaiAddress = '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063' 
+const lensHubProfileCreationProxyAddress = '0x1eeC6ecCaA4625da3Fa6Cd6339DBcc2418710E8a'
+const lensModuleGlobalPolygonMainnetAddress = '0x3Df697FF746a60CBe9ee8D47555c88CB66f03BB9'
+const lensHubMumbaiGovernance = '0x1A1cDf59C94a682a067fA2D288C2167a8506abd7'
+
 task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre) => {
   // Note that the use of these signers is a placeholder and is not meant to be used in
   // production.
@@ -47,7 +56,7 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   const governance = accounts[1];
   const treasuryAddress = accounts[2].address;
   const proxyAdminAddress = deployer.address;
-  const profileCreatorAddress = deployer.address;
+  const profileCreatorAddress = "0x1eeC6ecCaA4625da3Fa6Cd6339DBcc2418710E8a" //deployer.address;
 
   // Nonce management in case of deployment issues
   let deployerNonce = await ethers.provider.getTransactionCount(deployer.address);
@@ -344,35 +353,30 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     })
   );
 
-  const aDaiAddress = '0xDD4f3Ee61466C4158D394d57f3D4C397E91fBc51';
-  const aavePool = '0x6C9fB0D5bD9429eb9Cd96B85B81d872281771E6B';
-  //const lensHub = '0x60Ae865ee4C725cd04353b5AAb364553f56ceF82'
+  const admin: Signer = await ethers.getSigner('0xba77d43ee401a4c4a229c3649ccedbfe2b517208')
+  const aavePoolAddress = '0xba77d43ee401a4c4a229c3649ccedbfe2b517208'
 
-  const admin = await ethers.getSigners()[0]
-  const aPolygonMainnetDaiAddress = '0x82E64f49Ed5EC1bC6e43DAD4FC8Af9bb3A2312EE'
-  const aPolygonMainnetPool = '0x794a61358D6845594F94dc1DB02A252b5b4814aD'
-
-  await lensHub.setState(ProtocolState.Unpaused);
-
-  await currency.connect(deployer).mint(deployer.address, 10000);
   await interestManagerAave
     .connect(deployer)
-    .initialize(networkManager.address, currency.address, aDaiAddress, aavePool);
+    .initialize(networkManager.address, currency.address, currency.address, aavePoolAddress);
+
   await tokenFactory
     .connect(deployer)
-    .initialize(admin, tokenExchange.address, tokenLogic.address, networkManager.address);
+    .initialize(await admin.getAddress(), tokenExchange.address, tokenLogic.address, networkManager.address);
+
   await tokenExchange
     .connect(deployer)
-    .initialize(admin, admin, admin, tokenFactory.address, interestManagerAave.address, currency.address);
+    .initialize(await admin.getAddress(), await admin.getAddress(), await admin.getAddress(), tokenFactory.address, interestManagerAave.address, currency.address);
+
   await networkManager
     .connect(deployer)
     .initialize(
       tokenFactory.address,
       networkManager.address,
-      admin,
-      lensHub.address,
+      await admin.getAddress(),
+      lensHubPolygonMainnetAddress,
       profileCreationProxy.address,
-      admin,
+      await admin.getAddress(),
       currency.address
     );
 
@@ -411,10 +415,7 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   const json = JSON.stringify(addrs, null, 2);
   console.log(addrs);
 
-  console.log(
-    'Whitelitsted?: ',
-    await lensHub.isCollectModuleWhitelisted(serviceCollectModule.address)
-  );
-
   fs.writeFileSync('addresses.json', json, 'utf-8');
 });
+
+export { lensModuleGlobalPolygonMainnetAddress, lensHubProfileCreationProxyAddress, aavePolygonMainnetDaiAddress, aavePolygonMainnetPool, lensHubPolygonMainnetAddress, polygonMainnetDaiAddress }

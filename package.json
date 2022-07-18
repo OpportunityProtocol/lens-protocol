@@ -23,7 +23,17 @@
     "compile": "SKIP_LOAD=true hardhat clean && SKIP_LOAD=true hardhat compile",
     "console:fork": "MAINNET_FORK=true hardhat console",
     "format": "prettier --write .",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "graph-codegen": "cd lens-talent-subgraph && graph codegen",
+    "graph-build": "cd lens-talent-subgraph && graph build",
+    "graph-local": "docker-compose up",
+    "graph-local-clean": "docker-compose down -v && docker-compose rm -v && rm -rf data/ipfs data/postgres",
+    "create-local-graph-node": "graph create --node http://127.0.0.1:8020 lens-talent",
+    "deploy-local-graph-node": "cd lens-talent-subgraph && graph deploy --ipfs http://127.0.0.1:5001 --node http://127.0.0.1:8020 lens-talent",
+    "hardhat-local": "hardhat node --hostname 0.0.0.0 --fork https://polygon-mumbai.g.alchemy.com/v2/hE6e52UEwp8u_jj_SRZcf-n_YWanDE7d",
+    "full-deploy-lens-talent-local": "hardhat lens-talent-testnet-full-deploy --network localhost",
+    "set-balances-local": "hardhat set-balances --network localhost",
+    "lens-talent-deploy-markets-local": "hardhat lens-talent-configure-markets --network localhost"
   },
   "repository": {
     "type": "git",
@@ -73,9 +83,15 @@
   "dependencies": {
     "@aave/core-v3": "^1.13.1",
     "@ethersproject/contracts": "^5.6.0",
+    "@graphprotocol/graph-cli": "^0.32.0",
+    "@graphprotocol/graph-ts": "^0.27.0",
+    "@graphprotocol/hardhat-graph": "^0.1.0-alpha.0",
     "@openzeppelin/contracts": "^4.6.0",
     "@uniswap/v3-core": "^1.0.1"
   },
+  "resolutions": {
+    "hardhat/**/@ethereumjs/tx": "3.5.0"
+},
   "author": "Lens",
   "contributors": [
     "Peter Michael (Zer0dot)",

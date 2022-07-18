@@ -85,14 +85,14 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
             uint16 referralFee,
             uint256 serviceId
         ) = abi.decode(data, (uint256[], address, address, uint16, uint256));
-        if (
+        /*if (
             !_currencyWhitelisted(currency) ||
             recipient == address(0) ||
             referralFee > BPS_MAX ||
             amount[0] == 0 ||
             amount[1] == 0 ||
             amount[2] == 0
-        ) revert Errors.InitParamsInvalid();
+        ) revert Errors.InitParamsInvalid();*/
 
         _dataByPublicationByProfile[profileId][pubId].packages = amount;
         _dataByPublicationByProfile[profileId][pubId].amount = amount[0];

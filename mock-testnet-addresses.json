@@ -1,0 +1,8 @@
+{
+  "InterestManagerAave": "0x0868D6daf1ec7083A4c689375d9Ffb29d8C8012E",
+  "TokenExchange": "0xba2Ea42e51254b6b9522b8DD0a8FdDB9a4FDCe30",
+  "TokenFactory": "0xfcDf8aa37E203075cDdAEAFFd674A720CAB34A17",
+  "TokenLogic": "0xBd536d468A613306b641b885B511fB6bb9d3A7a2",
+  "NetworkManager": "0xfAac6b7F344C401D572f6A6750D1cCb54f4550c3",
+  "ServiceCollectModule": "0x863424D68f1cc82cEF9367282AA3590399CbDA6A"
+}

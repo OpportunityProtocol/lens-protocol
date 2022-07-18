@@ -48,11 +48,12 @@ library NetworkLibrary {
         uint256 marketId;
         address owner;
         string metadataPtr;
-        uint256[] wad;
+        uint256[] offers;
         uint256 referralShare;
         bool exist;
         uint256 id;
         address collectModule;
+        uint256 pubId;
     }
 
     enum RulingOptions {
@@ -112,7 +113,7 @@ library NetworkLibrary {
         bool exist;
         uint256 timestampPurchased;
         address referral;
-        uint8 package;
+        uint8 offer;
         ServiceResolutionStatus status;
     }
 }

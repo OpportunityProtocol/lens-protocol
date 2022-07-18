@@ -16,6 +16,7 @@ import 'hardhat-gas-reporter';
 import 'hardhat-contract-sizer';
 import 'hardhat-log-remover';
 import 'hardhat-spdx-license-identifier';
+import "@graphprotocol/hardhat-graph";
 
 if (!process.env.SKIP_LOAD) {
   glob.sync('./tasks/**/*.ts').forEach(function (file) {
@@ -42,12 +43,12 @@ const getCommonNetworkConfig = (networkName: eNetwork, networkId: number) => ({
 
 const mainnetFork = MAINNET_FORK
   ? {
-      blockNumber: 12012081,
+      blockNumber: 27207811, //12964900, //12012081,
       url: NETWORKS_RPC_URL['main'],
     }
   : undefined;
 
-const config: HardhatUserConfig = {
+const config: HardhatUserConfig & any = {
   solidity: {
     compilers: [
       {
@@ -108,6 +109,23 @@ const config: HardhatUserConfig = {
     matic: getCommonNetworkConfig(ePolygonNetwork.matic, 137),
     mumbai: getCommonNetworkConfig(ePolygonNetwork.mumbai, 80001),
     xdai: getCommonNetworkConfig(eXDaiNetwork.xdai, 100),
+    localhost: {
+      forking: mainnetFork,
+      blockGasLimit: DEFAULT_BLOCK_GAS_LIMIT,
+      gas: DEFAULT_BLOCK_GAS_LIMIT,
+      accounts: {
+        mnemonic: MNEMONIC,
+        path: MNEMONIC_PATH,
+        initialIndex: 0,
+        count: 20,
+      },
+      url: "http://localhost:8545",
+      chainId: 1337,
+      gasPrice: 8000000000,
+     // hardfork: 'london',
+      throwOnTransactionFailures: true,
+      throwOnCallFailures: true,
+    },
     hardhat: {
       hardfork: 'london',
       blockGasLimit: DEFAULT_BLOCK_GAS_LIMIT,
@@ -123,6 +141,7 @@ const config: HardhatUserConfig = {
       forking: mainnetFork,
     },
   },
+  defaultNetwork: 'localhost',
   gasReporter: {
     enabled: TRACK_GAS,
   },
@@ -132,6 +151,12 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: BLOCK_EXPLORER_KEY,
+  },
+  subgraph: {
+    name: "lens-talent",
+  },
+  paths: {
+    subgraph: "lens-talent-subgraph",
   },
 };
 
