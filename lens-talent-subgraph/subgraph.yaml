@@ -1,0 +1,42 @@
+specVersion: 0.0.4
+schema:
+  file: ./schema.graphql
+features:
+  - ipfsOnEthereumContracts
+dataSources:
+  - kind: ethereum
+    name: NetworkManager
+    network: localhost
+    source:
+      address: "0xfAac6b7F344C401D572f6A6750D1cCb54f4550c3"
+      abi: NetworkManager
+      startBlock: 27207811
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.5
+      language: wasm/assemblyscript
+      entities:
+        - VerifiedUser
+        - Service
+        - PurchasedService
+        - Contract
+        - Market
+      abis:
+        - name: NetworkManager
+          file: ./abis/NetworkManager.json
+      eventHandlers:
+        - event: UserRegistered(indexed address,indexed string)
+          handler: handleUserRegistered
+        - event: ServiceCreated(indexed uint256,indexed uint256,indexed address,uint256[],string,uint256)
+          handler: handleServiceCreated
+        - event: ServicePurchased(indexed uint256,uint256,uint256,indexed address,indexed
+            address,address)
+          handler: handleServicePurchased
+        - event: ServiceResolved(indexed address,indexed address,indexed
+            uint256,uint256,uint8)
+          handler: handleServiceResolved
+        - event: ContractCreated(uint256,indexed address,indexed uint256,indexed string)
+          handler: handleContractCreated
+        - event: MarketCreated(indexed uint256,indexed string)
+          handler: handleMarketCreated
+      file: ./src/network-manager.ts
