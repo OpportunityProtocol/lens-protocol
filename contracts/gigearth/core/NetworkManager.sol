@@ -187,17 +187,17 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     function registerWorker(DataTypes.CreateProfileData calldata vars) external {
         require(!isRegisteredUser(msg.sender), "duplicate registration");
         /************ TESTNET ONLY ***************/
-        proxyProfileCreator.proxyCreateProfile(vars);
-        bytes memory b;
-        b = abi.encodePacked(vars.handle, ".test");
-        string memory registeredHandle = string(b);
+        // proxyProfileCreator.proxyCreateProfile(vars);
+        // bytes memory b;
+        // b = abi.encodePacked(vars.handle, ".test");
+        // string memory registeredHandle = string(b);
         /************ END TESTNET ONLY ***************/
 
         /************ MAINNET ***************/
-        // lensHub.createProfile(vars);
-        // bytes memory b;
-        // b = abi.encodePacked(vars.handle);
-        // string memory registeredHandle = string(b);
+        lensHub.createProfile(vars);
+        bytes memory b;
+        b = abi.encodePacked(vars.handle);
+        string memory registeredHandle = string(b);
         // /************ END MAINNET AND LOCAL ONLY ***************/
     
          addressToLensProfileId[msg.sender] = lensHub.getProfileIdByHandle(registeredHandle);

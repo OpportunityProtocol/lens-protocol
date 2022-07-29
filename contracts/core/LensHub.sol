@@ -641,7 +641,7 @@ contract LensHub is LensNFTBase, VersionedInitializable, LensMultiState, LensHub
         whenNotPaused
         returns (uint256)
     {
-        unchecked {
+        /*unchecked {
             _validateRecoveredAddress(
                 _calculateDigest(
                     keccak256(
@@ -658,7 +658,7 @@ contract LensHub is LensNFTBase, VersionedInitializable, LensMultiState, LensHub
                 vars.collector,
                 vars.sig
             );
-        }
+        }*/
         return
             InteractionLogic.collect(
                 vars.collector,

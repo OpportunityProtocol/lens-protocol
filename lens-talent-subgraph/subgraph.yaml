@@ -8,9 +8,9 @@ dataSources:
     name: NetworkManager
     network: localhost
     source:
-      address: "0xfAac6b7F344C401D572f6A6750D1cCb54f4550c3"
+      address: "0xe508652f4AA61383dA8Fe6Da6776B1E392B0C512"
       abi: NetworkManager
-      startBlock: 27207811
+      startBlock: 26362114
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.5

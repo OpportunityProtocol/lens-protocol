@@ -15,7 +15,7 @@ import { waitForTx, initEnv, getAddrs, ZERO_ADDRESS, deployContract } from './he
 import ethers, { BigNumber, Wallet, providers, Signer } from 'ethers';
 import { Contract } from '@ethersproject/contracts';
 
-import addresses from '../mock-testnet-addresses.json';
+import addresses from '../addresses.json';
 import { lensHubPolygonMumbaiAddress } from './constants';
 
 const tenPow18 = BigNumber.from('1000000000000000000');
@@ -49,8 +49,8 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
     const signers = await ethers.getSigners();
     const admin: Signer = await ethers.getSigner('0xba77d43ee401a4c4a229c3649ccedbfe2b517208');
 
-    const tokenFactory = TokenFactory__factory.connect(addresses['TokenFactory'], admin);
-    const networkManager = NetworkManager__factory.connect(addresses['NetworkManager'], admin);
+    const tokenFactory = TokenFactory__factory.connect(addresses['Token Factory'], admin);
+    const networkManager = NetworkManager__factory.connect(addresses['Network Manager'], admin);
 
     const MOCK_PROFILE_URI = 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu';
     const MOCK_FOLLOW_NFT_URI =
@@ -71,7 +71,7 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
 
 
     await networkManager.connect(signers[6]).registerWorker({
-      to: addresses['NetworkManager'],
+      to: addresses['Network Manager'],
       handle: handles[6],
       imageURI: MOCK_PROFILE_URI,
       followModule: '0x0000000000000000000000000000000000000000',
@@ -80,7 +80,7 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
     });
 
     await networkManager.connect(signers[7]).registerWorker({
-      to: addresses['NetworkManager'],
+      to: addresses['Network Manager'],
       handle: handles[7],
       imageURI: MOCK_PROFILE_URI,
       followModule: '0x0000000000000000000000000000000000000000',
@@ -95,7 +95,7 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
         'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu',
         [1000, 2000, 3000],
         0,
-        addresses['ServiceCollectModule']
+        addresses['Service Collect Module']
       );
     await networkManager
       .connect(signers[7])
@@ -104,7 +104,7 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
         'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu',
         [1000, 2000, 3000],
         0,
-        addresses['ServiceCollectModule']
+        addresses['Service Collect Module']
       );
 
     await networkManager.connect(admin).createContract(1, 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu')

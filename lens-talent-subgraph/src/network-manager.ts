@@ -28,29 +28,26 @@ export function handleServiceCreated(event: ServiceCreated): void {
 }
 export function handleServicePurchased(event: ServicePurchased): void {
   const id = event.params.purchaseId.toString();
-  let purchasedService = PurchasedService.load(id);
+  const purchasedService = PurchasedService.load(id);
 
   if (purchasedService) {
     const linkedService = Service.load(event.params.serviceId.toString());
-
     if (linkedService) {
       purchasedService.metadata = linkedService.metadataPtr;
     } else {
       purchasedService.metadata = '';
     }
-
-    if (!purchasedService) {
-      purchasedService = new PurchasedService(id);
-      purchasedService.id = id;
-      purchasedService.client = event.params.purchaser;
-      purchasedService.datePurchased = new BigInt(20);
-      purchasedService.purchaseId = event.params.purchaseId;
-      purchasedService.referral = event.params.referral;
-      purchasedService.owner = event.params.owner;
-      purchasedService.pubId = event.params.pubId;
-      purchasedService.serviceId = event.params.serviceId;
-      purchasedService.save();
-    }
+  } else {
+    const newPurchasedService = new PurchasedService(id);
+    newPurchasedService.id = id;
+    newPurchasedService.client = event.params.purchaser;
+    newPurchasedService.datePurchased = new BigInt(20);
+    newPurchasedService.purchaseId = event.params.purchaseId;
+    newPurchasedService.referral = event.params.referral;
+    newPurchasedService.owner = event.params.owner;
+    newPurchasedService.pubId = event.params.pubId;
+    newPurchasedService.serviceId = event.params.serviceId;
+    newPurchasedService.save();
   }
 }
 

@@ -1,4 +1,4 @@
-import '@nomiclabs/hardhat-ethers';
+//import '@nomiclabs/hardhat-ethers';
 import { Signer } from 'ethers';
 import { hexlify, keccak256, RLP } from 'ethers/lib/utils';
 import fs from 'fs';
@@ -33,6 +33,7 @@ import {
   NetworkManager__factory,
   ServiceCollectModule__factory,
 } from '../typechain-types';
+import { aavePolygonMumbaiDaiAddress, aavePolygonMumbaiPool, polygonMumbaiDaiAddress } from './constants';
 import { deployContract, ProtocolState, waitForTx, ZERO_ADDRESS } from './helpers/utils';
 
 const TREASURY_FEE_BPS = 50;
@@ -48,6 +49,8 @@ const lensModuleGlobalPolygonMainnetAddress = '0x3Df697FF746a60CBe9ee8D47555c88C
 const lensHubMumbaiGovernance = '0x1A1cDf59C94a682a067fA2D288C2167a8506abd7'
 
 task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre) => {
+  hre.ethers.provider = new hre.ethers.providers.JsonRpcProvider(hre.ethers.provider.connection.url)
+
   // Note that the use of these signers is a placeholder and is not meant to be used in
   // production.
   const ethers = hre.ethers;
@@ -57,6 +60,27 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   const treasuryAddress = accounts[2].address;
   const proxyAdminAddress = deployer.address;
   const profileCreatorAddress = "0x1eeC6ecCaA4625da3Fa6Cd6339DBcc2418710E8a" //deployer.address;
+
+  const admin: Signer = await ethers.getSigner('0xFaD20fD4eC620BbcA8091eF5DC04b73dc0e2868a')
+  const adminAddress = await admin.getAddress()
+
+  const MATIC_BALACE = '0xFFFFFFFFFFFFFFFF';
+
+  await hre.network.provider.send('hardhat_setBalance', [
+    governance.address,
+    MATIC_BALACE,
+  ]);
+
+  await hre.network.provider.send('hardhat_setBalance', [
+    adminAddress,
+    MATIC_BALACE,
+  ]);
+
+  await hre.network.provider.send('hardhat_setBalance', [
+    deployer.address,
+    MATIC_BALACE,
+  ]);
+
 
   // Nonce management in case of deployment issues
   let deployerNonce = await ethers.provider.getTransactionCount(deployer.address);
@@ -353,37 +377,41 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     })
   );
 
-  const admin: Signer = await ethers.getSigner('0xba77d43ee401a4c4a229c3649ccedbfe2b517208')
-  const aavePoolAddress = '0xba77d43ee401a4c4a229c3649ccedbfe2b517208'
+  await waitForTx(
+    lensHub.setState(0, {
+      nonce: governanceNonce++,
+    })
+  );
+
 
   await interestManagerAave
     .connect(deployer)
-    .initialize(networkManager.address, currency.address, currency.address, aavePoolAddress);
+    .initialize(adminAddress, polygonMumbaiDaiAddress,  aavePolygonMumbaiDaiAddress, aavePolygonMumbaiPool);
 
   await tokenFactory
     .connect(deployer)
-    .initialize(await admin.getAddress(), tokenExchange.address, tokenLogic.address, networkManager.address);
+    .initialize(adminAddress, tokenExchange.address, tokenLogic.address, networkManager.address);
 
   await tokenExchange
     .connect(deployer)
-    .initialize(await admin.getAddress(), await admin.getAddress(), await admin.getAddress(), tokenFactory.address, interestManagerAave.address, currency.address);
+    .initialize(adminAddress, adminAddress, networkManager.address, tokenFactory.address, interestManagerAave.address, polygonMumbaiDaiAddress);
 
   await networkManager
     .connect(deployer)
     .initialize(
       tokenFactory.address,
       networkManager.address,
-      await admin.getAddress(),
-      lensHubPolygonMainnetAddress,
+      adminAddress,
+      lensHub.address,
       profileCreationProxy.address,
-      await admin.getAddress(),
-      currency.address
+      adminAddress,
+      polygonMumbaiDaiAddress
     );
 
   // Save and log the addresses
   const addrs = {
     'lensHub proxy': lensHub.address,
-    'lensHub impl:': lensHubImpl.address,
+    'lensHub impl': lensHubImpl.address,
     'publishing logic lib': publishingLogic.address,
     'interaction logic lib': interactionLogic.address,
     'follow NFT impl': followNFTImplAddress,
@@ -405,12 +433,12 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     'follower only reference module': followerOnlyReferenceModule.address,
     'UI data provider': uiDataProvider.address,
     'Profile creation proxy': profileCreationProxy.address,
-    'Interest Manager Aave: ': interestManagerAave.address,
-    'Token Factory: ': tokenFactory.address,
-    'Token Exchange: ': tokenExchange.address,
-    'Network Manager: ': networkManager.address,
-    'Token Logic: ': tokenLogic.address,
-    'Service Collect Module: ': serviceCollectModule.address,
+    'Interest Manager Aave': interestManagerAave.address,
+    'Token Factory': tokenFactory.address,
+    'Token Exchange': tokenExchange.address,
+    'Network Manager': networkManager.address,
+    'Token Logic': tokenLogic.address,
+    'Service Collect Module': serviceCollectModule.address,
   };
   const json = JSON.stringify(addrs, null, 2);
   console.log(addrs);

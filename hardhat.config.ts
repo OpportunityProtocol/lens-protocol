@@ -43,8 +43,8 @@ const getCommonNetworkConfig = (networkName: eNetwork, networkId: number) => ({
 
 const mainnetFork = MAINNET_FORK
   ? {
-      blockNumber: 27207811, //12964900, //12012081,
-      url: NETWORKS_RPC_URL['main'],
+      blockNumber: 26362114, //27361705, //27207811, //12964900, //12012081,
+      url: 'https://polygon-mumbai.g.alchemy.com/v2/hE6e52UEwp8u_jj_SRZcf-n_YWanDE7d' //NETWORKS_RPC_URL['main'],
     }
   : undefined;
 
@@ -122,7 +122,7 @@ const config: HardhatUserConfig & any = {
       url: "http://localhost:8545",
       chainId: 1337,
       gasPrice: 8000000000,
-     // hardfork: 'london',
+      hardfork: 'london',
       throwOnTransactionFailures: true,
       throwOnCallFailures: true,
     },
