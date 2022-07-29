@@ -134,28 +134,6 @@ export class Evidence__Params {
   }
 }
 
-export class MarketCreated extends ethereum.Event {
-  get params(): MarketCreated__Params {
-    return new MarketCreated__Params(this);
-  }
-}
-
-export class MarketCreated__Params {
-  _event: MarketCreated;
-
-  constructor(event: MarketCreated) {
-    this._event = event;
-  }
-
-  get id(): BigInt {
-    return this._event.parameters[0].value.toBigInt();
-  }
-
-  get marketName(): Bytes {
-    return this._event.parameters[1].value.toBytes();
-  }
-}
-
 export class MetaEvidence extends ethereum.Event {
   get params(): MetaEvidence__Params {
     return new MetaEvidence__Params(this);
@@ -277,6 +255,10 @@ export class ServicePurchased__Params {
 
   get referral(): Address {
     return this._event.parameters[5].value.toAddress();
+  }
+
+  get offer(): BigInt {
+    return this._event.parameters[6].value.toBigInt();
   }
 }
 

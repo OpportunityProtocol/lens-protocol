@@ -5,8 +5,7 @@ import {
   ServicePurchased,
   ServiceResolved,
   ContractOwnershipUpdate,
-  ContractCreated,
-  MarketCreated,
+  ContractCreated
 } from '../generated/NetworkManager/NetworkManager';
 import { Market, Service, PurchasedService, Contract } from '../generated/schema';
 
@@ -19,7 +18,7 @@ export function handleServiceCreated(event: ServiceCreated): void {
     service = new Service(id);
     service.id = id;
     service.marketId = event.params.marketId;
-    service.owner = event.params.creator;
+    service.creator = event.params.creator;
     service.metadataPtr = event.params.metadataPtr;
     service.offers = event.params.offers;
     service.pubId = event.params.pubId;
@@ -30,21 +29,24 @@ export function handleServicePurchased(event: ServicePurchased): void {
   const id = event.params.purchaseId.toString();
   const purchasedService = PurchasedService.load(id);
 
-  if (purchasedService) {
-    const linkedService = Service.load(event.params.serviceId.toString());
-    if (linkedService) {
-      purchasedService.metadata = linkedService.metadataPtr;
-    } else {
-      purchasedService.metadata = '';
-    }
-  } else {
+  if (!purchasedService) {
     const newPurchasedService = new PurchasedService(id);
+
+    const linkedService = Service.load(event.params.serviceId.toString());
+
+    if (linkedService) {
+      newPurchasedService.metadata = linkedService.metadataPtr;
+    } else {
+      newPurchasedService.metadata = '';
+    }
+
     newPurchasedService.id = id;
     newPurchasedService.client = event.params.purchaser;
     newPurchasedService.datePurchased = new BigInt(20);
     newPurchasedService.purchaseId = event.params.purchaseId;
+    newPurchasedService.status = 0;
+    newPurchasedService.offer = event.params.offer;
     newPurchasedService.referral = event.params.referral;
-    newPurchasedService.owner = event.params.owner;
     newPurchasedService.pubId = event.params.pubId;
     newPurchasedService.serviceId = event.params.serviceId;
     newPurchasedService.save();
@@ -80,4 +82,3 @@ export function handleContractCreated(event: ContractCreated): void {
     contract.save();
   }
 }
-export function handleMarketCreated(event: MarketCreated): void {}

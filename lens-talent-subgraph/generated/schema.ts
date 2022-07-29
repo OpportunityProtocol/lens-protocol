@@ -274,15 +274,6 @@ export class PurchasedService extends Entity {
     this.set("purchaseId", Value.fromBigInt(value));
   }
 
-  get offer(): i32 {
-    let value = this.get("offer");
-    return value!.toI32();
-  }
-
-  set offer(value: i32) {
-    this.set("offer", Value.fromI32(value));
-  }
-
   get metadata(): string {
     let value = this.get("metadata");
     return value!.toString();
@@ -292,6 +283,15 @@ export class PurchasedService extends Entity {
     this.set("metadata", Value.fromString(value));
   }
 
+  get offer(): BigInt {
+    let value = this.get("offer");
+    return value!.toBigInt();
+  }
+
+  set offer(value: BigInt) {
+    this.set("offer", Value.fromBigInt(value));
+  }
+
   get status(): i32 {
     let value = this.get("status");
     return value!.toI32();
@@ -299,15 +299,6 @@ export class PurchasedService extends Entity {
 
   set status(value: i32) {
     this.set("status", Value.fromI32(value));
-  }
-
-  get owner(): Bytes {
-    let value = this.get("owner");
-    return value!.toBytes();
-  }
-
-  set owner(value: Bytes) {
-    this.set("owner", Value.fromBytes(value));
   }
 
   get pubId(): BigInt {

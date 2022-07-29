@@ -53,7 +53,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      * @param purchaser The address purchasing the service
      * @param referral The referral for the purchase, if any
      */
-    event ServicePurchased(uint256 indexed serviceId, uint256 purchaseId, uint256 pubId,  address indexed owner, address indexed purchaser, address referral);
+    event ServicePurchased(uint256 indexed serviceId, uint256 purchaseId, uint256 pubId, address indexed owner, address indexed purchaser, address referral, uint256 offer);
 
     /**
      * Emitted whena  service is resolved
@@ -306,7 +306,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
 
         lensHub.collectWithSig(collectWithSigData);
 
-        emit ServicePurchased(serviceId, _claimedServiceCounter, serviceIdToPublicationId[serviceId], service.owner, msg.sender, referral);
+        emit ServicePurchased(serviceId, _claimedServiceCounter, serviceIdToPublicationId[serviceId], service.owner, msg.sender, referral, offerIndex);
         return _claimedServiceCounter;
     }
 
