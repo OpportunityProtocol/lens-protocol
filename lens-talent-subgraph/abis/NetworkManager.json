@@ -119,6 +119,12 @@
         "internalType": "address",
         "name": "worker",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amt",
+        "type": "uint256"
       }
     ],
     "name": "ContractOwnershipUpdate",
@@ -372,6 +378,18 @@
         "indexed": true,
         "internalType": "string",
         "name": "lensHandle",
+        "type": "string"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "profileId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "imageURI",
         "type": "string"
       }
     ],
@@ -788,7 +806,7 @@
           },
           {
             "internalType": "address",
-            "name": "owner",
+            "name": "creator",
             "type": "address"
           },
           {
@@ -858,6 +876,11 @@
             "type": "address"
           },
           {
+            "internalType": "address",
+            "name": "creator",
+            "type": "address"
+          },
+          {
             "internalType": "bool",
             "name": "exist",
             "type": "bool"
@@ -904,7 +927,7 @@
           },
           {
             "internalType": "address",
-            "name": "owner",
+            "name": "creator",
             "type": "address"
           },
           {
@@ -1162,6 +1185,11 @@
       {
         "internalType": "address",
         "name": "client",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "creator",
         "type": "address"
       },
       {
@@ -1569,7 +1597,7 @@
       },
       {
         "internalType": "address",
-        "name": "owner",
+        "name": "creator",
         "type": "address"
       },
       {
@@ -1623,7 +1651,7 @@
       },
       {
         "internalType": "address",
-        "name": "owner",
+        "name": "creator",
         "type": "address"
       },
       {

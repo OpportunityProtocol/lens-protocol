@@ -16,7 +16,7 @@ import ethers, { BigNumber, Wallet, providers, Signer } from 'ethers';
 import { Contract } from '@ethersproject/contracts';
 
 import addresses from '../addresses.json';
-import { lensHubPolygonMumbaiAddress } from './constants';
+import { DAI_ABI, lensHubPolygonMumbaiAddress, polygonMumbaiDaiAddress } from './constants';
 
 const tenPow18 = BigNumber.from('1000000000000000000');
 const zeroAddress = '0x0000000000000000000000000000000000000000';
@@ -51,6 +51,7 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
 
     const tokenFactory = TokenFactory__factory.connect(addresses['Token Factory'], admin);
     const networkManager = NetworkManager__factory.connect(addresses['Network Manager'], admin);
+    const dai = new Contract(polygonMumbaiDaiAddress, DAI_ABI, admin);
 
     const MOCK_PROFILE_URI = 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu';
     const MOCK_FOLLOW_NFT_URI =
@@ -79,7 +80,7 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
       followNFTURI: MOCK_FOLLOW_NFT_URI,
     });
 
-    await networkManager.connect(signers[7]).registerWorker({
+    await networkManager.connect(signers[1]).registerWorker({
       to: addresses['Network Manager'],
       handle: handles[7],
       imageURI: MOCK_PROFILE_URI,
@@ -97,8 +98,9 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
         0,
         addresses['Service Collect Module']
       );
+
     await networkManager
-      .connect(signers[7])
+      .connect(signers[1])
       .createService(
         1,
         'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu',
@@ -107,6 +109,15 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
         addresses['Service Collect Module']
       );
 
-    await networkManager.connect(admin).createContract(1, 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu')
+    //create contracts
+
+    // await networkManager.connect(signers[1])
+    // .createContract(1, 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu')
+
+    // await networkManager.connect(admin).createContract(1, 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu')
+
+    console.log('Minting dai...')
+    await dai.functions['mint(uint256)'](10000)
+    console.log('Finish minting dai...')
   }
 );

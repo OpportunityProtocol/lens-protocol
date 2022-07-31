@@ -7,7 +7,6 @@ import "../interface/IEvidence.sol";
 import "../interface/ITokenFactory.sol";
 import "../../interfaces/ILensHub.sol";
 import "../../libraries/DataTypes.sol";
-import "../libraries/Queue.sol";
 import "../libraries/NetworkLibrary.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -24,15 +23,15 @@ interface IServiceCollectModule {
 }
 
 contract NetworkManager is Initializable, IArbitrable, IEvidence {
-    using Queue for Queue.Uint256Queue;
-
     /**
      * Emitted when an address is registered with lenshub and lenstalent.
      * 
      * @param registeredAddress The address submitting the registration.
      * @param lensHandle The handle chosen by the registering address.
+     * @param profileId The profile id of the user registering through Lens
+     * @param imageURI The URI of the image 
      */
-    event UserRegistered(address indexed registeredAddress, string indexed lensHandle);
+    event UserRegistered(address indexed registeredAddress, string indexed lensHandle, uint256 indexed profileId, string imageURI);
 
     /**
      * Emitted when a new service is created
@@ -75,7 +74,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      * @param employer The address of the employer
      * @param worker The address of the worker (if any)
      */
-    event ContractOwnershipUpdate(uint256 indexed id, uint256 indexed marketId, NetworkLibrary.ContractOwnership indexed ownership, address employer, address worker);
+    event ContractOwnershipUpdate(uint256 indexed id, uint256 indexed marketId, NetworkLibrary.ContractOwnership indexed ownership, address employer, address worker, uint256 amt);
 
     /**
      * Emitted when a new contract is created
@@ -199,10 +198,13 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         b = abi.encodePacked(vars.handle);
         string memory registeredHandle = string(b);
         // /************ END MAINNET AND LOCAL ONLY ***************/
-    
-         addressToLensProfileId[msg.sender] = lensHub.getProfileIdByHandle(registeredHandle);
-         verifiedFreelancers.push(msg.sender);
-         emit UserRegistered(msg.sender, vars.handle);
+
+        uint256 profileId = lensHub.getProfileIdByHandle(registeredHandle);
+
+        addressToLensProfileId[msg.sender] = profileId;
+        verifiedFreelancers.push(msg.sender);
+
+         emit UserRegistered(msg.sender, vars.handle, profileId, vars.imageURI);
     }
 
     /**
@@ -246,7 +248,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
 
         NetworkLibrary.Service memory newService = NetworkLibrary.Service({
             marketId: marketId,
-            owner: msg.sender,
+            creator: msg.sender,
             metadataPtr: metadataPtr,
             offers: offers,
             id: serviceId,
@@ -265,7 +267,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         serviceIdToService[newService.id] = newService;
         serviceIDToMarketID[newService.id] = newService.marketId;
         serviceIdToPublicationId[newService.id] = newService.pubId;
-        emit ServiceCreated(newService.id, newService.marketId, newService.owner, newService.offers, newService.metadataPtr, newService.pubId);
+        emit ServiceCreated(newService.id, newService.marketId, newService.creator, newService.offers, newService.metadataPtr, newService.pubId);
     }
 
 
@@ -286,6 +288,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         purchasedServiceIdToMetdata[_claimedServiceCounter] = NetworkLibrary.PurchasedServiceMetadata({
             exist: true,
             client: msg.sender,
+            creator: service.creator,
             timestampPurchased: block.timestamp,
             referral: referral,
             purchaseId: _claimedServiceCounter,
@@ -298,7 +301,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
 
         DataTypes.CollectWithSigData memory collectWithSigData = DataTypes.CollectWithSigData({
             collector: msg.sender,
-            profileId: addressToLensProfileId[service.owner],
+            profileId: addressToLensProfileId[service.creator],
             pubId: serviceIdToPublicationId[serviceId],
             data: processCollectData,
             sig: sig
@@ -306,7 +309,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
 
         lensHub.collectWithSig(collectWithSigData);
 
-        emit ServicePurchased(serviceId, _claimedServiceCounter, serviceIdToPublicationId[serviceId], service.owner, msg.sender, referral, offerIndex);
+        emit ServicePurchased(serviceId, _claimedServiceCounter, serviceIdToPublicationId[serviceId], service.creator, msg.sender, referral, offerIndex);
         return _claimedServiceCounter;
     }
 
@@ -316,16 +319,17 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      * @param purchaseId The purchase id of the service
      */ 
     function resolveService(uint256 serviceId, uint256 purchaseId) public onlyServiceClient {
-        NetworkLibrary.PurchasedServiceMetadata memory metadata = purchasedServiceIdToMetdata[serviceId];
+        NetworkLibrary.PurchasedServiceMetadata memory metadata = purchasedServiceIdToMetdata[purchaseId];
         NetworkLibrary.Service memory service = serviceIdToService[serviceId];
+
         require(metadata.status != NetworkLibrary.ServiceResolutionStatus.RESOLVED, "already resolved");
         require(metadata.client == msg.sender, "only client");
         require(metadata.exist == true, "service doesn't exist");
 
-        IServiceCollectModule(service.collectModule).releaseCollectedFunds(addressToLensProfileId[service.owner], serviceIdToPublicationId[service.id], metadata.offer);
+        IServiceCollectModule(service.collectModule).releaseCollectedFunds(addressToLensProfileId[service.creator], serviceIdToPublicationId[service.id], metadata.offer);
         metadata.status = NetworkLibrary.ServiceResolutionStatus.RESOLVED;
 
-       emit ServiceResolved(service.owner, msg.sender, purchaseId, serviceId, metadata.offer);
+       emit ServiceResolved(service.creator, msg.sender, purchaseId, serviceId, metadata.offer);
     }
 
     ///////////////////////////////////////////// Gig Functions
@@ -363,6 +367,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      */
     function grantProposalRequest(uint256 contractId, address newWorker, uint256 wad) external onlyWhenOwnership(contractId, NetworkLibrary.ContractOwnership.Unclaimed) onlyContractEmployer(contractId) {
         NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
+        require(newWorker != address(relationship.employer), "Can't work your own contract.");
         require(newWorker != address(0), "You must grant this proposal to a valid worker.");
         require(relationship.worker == address(0), "This job is already being worked.");
         require(wad != uint256(0),"The payout amount must be greater than 0.");
@@ -373,7 +378,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         relationship.contractOwnership = NetworkLibrary.ContractOwnership.Claimed;
 
         _initializeEscrowFundsAndTransfer(contractId);
-        emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Claimed, relationship.employer, newWorker);
+        emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Claimed, relationship.employer, newWorker, wad);
     }
 
     /**
@@ -390,11 +395,11 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         _releaseContractFunds(relationship.wad, contractId);
         relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
 
-        emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Resolved, relationship.employer, relationship.worker);
+        emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Resolved, relationship.employer, relationship.worker, relationship.wad);
     }
 
     /**
-     * Allows the employer to release the contract
+     * Allows the worker to release the contract
      * @param contractId The id of the contract
      */
     function releaseContract(uint256 contractId) external onlyWhenOwnership(contractId, NetworkLibrary.ContractOwnership.Claimed) onlyContractWorker()  {
@@ -415,7 +420,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         contractStruct.wad = 0;
         contractStruct.contractOwnership = NetworkLibrary.ContractOwnership.Unclaimed;
 
-        emit ContractOwnershipUpdate(contractId, contractStruct.marketId, NetworkLibrary.ContractOwnership.Unclaimed, contractStruct.employer, address(0));
+        emit ContractOwnershipUpdate(contractId, contractStruct.marketId, NetworkLibrary.ContractOwnership.Unclaimed, contractStruct.employer, address(0), contractStruct.wad);
     }
 
     /**
@@ -465,7 +470,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
 
             relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
 
-            emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Resolved, relationship.employer, relationship.worker);
+            emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Resolved, relationship.employer, relationship.worker, relationship.wad);
         } else {
             uint256 requiredAmount = arbitrator.arbitrationCost("");
             if (msg.value < requiredAmount) {
@@ -478,7 +483,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
 
             relationship.contractOwnership = NetworkLibrary.ContractOwnership.Disputed;
             
-            emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Disputed, relationship.employer, relationship.worker);
+            emit ContractOwnershipUpdate(contractId, relationship.marketId, NetworkLibrary.ContractOwnership.Disputed, relationship.employer, relationship.worker, relationship.wad);
         }
     }
 

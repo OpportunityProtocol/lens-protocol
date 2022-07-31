@@ -118,6 +118,15 @@ export class VerifiedUser extends Entity {
   set handle(value: string) {
     this.set("handle", Value.fromString(value));
   }
+
+  get imageURI(): string {
+    let value = this.get("imageURI");
+    return value!.toString();
+  }
+
+  set imageURI(value: string) {
+    this.set("imageURI", Value.fromString(value));
+  }
 }
 
 export class Service extends Entity {
@@ -160,13 +169,13 @@ export class Service extends Entity {
     this.set("marketId", Value.fromBigInt(value));
   }
 
-  get owner(): Bytes {
-    let value = this.get("owner");
+  get creator(): Bytes {
+    let value = this.get("creator");
     return value!.toBytes();
   }
 
-  set owner(value: Bytes) {
-    this.set("owner", Value.fromBytes(value));
+  set creator(value: Bytes) {
+    this.set("creator", Value.fromBytes(value));
   }
 
   get metadataPtr(): string {
@@ -236,6 +245,15 @@ export class PurchasedService extends Entity {
 
   set id(value: string) {
     this.set("id", Value.fromString(value));
+  }
+
+  get creator(): Bytes {
+    let value = this.get("creator");
+    return value!.toBytes();
+  }
+
+  set creator(value: Bytes) {
+    this.set("creator", Value.fromBytes(value));
   }
 
   get client(): Bytes {
@@ -412,6 +430,15 @@ export class Contract extends Entity {
 
   set resolutionTimestamp(value: string) {
     this.set("resolutionTimestamp", Value.fromString(value));
+  }
+
+  get amount(): BigInt {
+    let value = this.get("amount");
+    return value!.toBigInt();
+  }
+
+  set amount(value: BigInt) {
+    this.set("amount", Value.fromBigInt(value));
   }
 }
 

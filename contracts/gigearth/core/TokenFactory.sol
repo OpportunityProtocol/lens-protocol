@@ -115,8 +115,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
                 "invalid-params");
 
         uint marketID = ++_numMarkets;
-        console.log(_numMarkets);
-        console.log("Created market id with: ", marketID);
+
         MarketInfo storage info = _marketInfo[marketName];
 
         _marketDetails[marketID] = MarketDetails({
@@ -133,12 +132,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
                 allInterestToPlatform: allInterestToPlatform
         });
 
- 
-        console.log("Exist?: ",  _marketDetails[marketID].exists);
         _marketIDs[marketName] = marketID;
-        console.log("Worked?");
-        console.log(marketName);
-        console.log(marketID);
         emitNewMarketEvent(_marketDetails[marketID]);
         return marketID;
     }
@@ -164,19 +158,16 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
      * @param lister The address of the account which off-chain software shall see as lister of this token. Only emitted, not stored
      */
     function addToken(string calldata tokenName, uint marketID, address lister) external virtual override onlyNetworkManager returns(uint) {
-        console.log("Market ID: ", marketID);
-        console.log("Token name: ", tokenName);
         MarketInfo storage marketInfo = _markets[marketID];
         require(_marketDetails[marketID].exists, "market-not-exist");
        // require(isValidTokenName(tokenName, marketID), "invalid-name");
-        console.log("TB");
+
         IServiceToken serviceToken = IServiceToken(address(new MinimalProxy(_tokenLogic)));
-        console.log("Storing token with address: ", address(serviceToken));
-        console.log("Storing amrket id: ", marketID);
+
         _tokenAddressToMarketID[address(serviceToken)] = marketID;
-        console.log("Service token address: ", address(serviceToken));
+
         serviceToken.initialize(string(abi.encodePacked( _marketDetails[marketID].name, ": ", tokenName)), _tokenExchange);
-        console.log("TC");
+
         uint tokenID = ++_marketDetails[marketID].numTokens;
         TokenInfo memory tokenInfo = TokenInfo({
             exists: true,
@@ -184,7 +175,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
             name: tokenName,
             serviceToken: serviceToken
         });
-        console.log("TD");
+
         marketInfo.tokens[tokenID] = tokenInfo;
         marketInfo.tokenIDs[tokenName] = tokenID;
         marketInfo.tokenNameUsed[tokenName] = true;
@@ -193,7 +184,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
             marketID: marketID,
             tokenID: tokenID
         });
-        console.log("TE");
+
         emit NewToken(tokenID, marketID, tokenName, address(serviceToken), lister);
         return tokenID;
     }
@@ -349,8 +340,6 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     }
 
     function getMarketIDByTokenAddress(address tokenAddress) external virtual view override returns(uint) {
-        console.log("The token address: ", tokenAddress);
-        console.log("Trying to return, ", _tokenAddressToMarketID[tokenAddress]);
         return _tokenAddressToMarketID[tokenAddress];
     }
 }

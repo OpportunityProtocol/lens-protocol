@@ -9,6 +9,7 @@ type VerifiedUser @entity {
   id: ID!
   address: Bytes!
   handle: String!
+  imageURI: String!
 }
 
 type Service @entity {
@@ -22,6 +23,7 @@ type Service @entity {
 
 type PurchasedService @entity {
   id: ID!
+  creator: Bytes!
   client: Bytes!
   referral: Bytes!
   datePurchased: BigInt!
@@ -42,6 +44,7 @@ type Contract @entity {
   ownership: Int!
   acceptanceTimestamp: String!
   resolutionTimestamp: String!
+  amount: BigInt!
 }
 
 type Market @entity {

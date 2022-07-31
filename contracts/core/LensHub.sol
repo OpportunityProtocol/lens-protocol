@@ -147,9 +147,8 @@ contract LensHub is LensNFTBase, VersionedInitializable, LensMultiState, LensHub
         whenNotPaused
         returns (uint256)
     {
-        console.log(" ABaby");
         if (!_profileCreatorWhitelisted[msg.sender]) revert Errors.ProfileCreatorNotWhitelisted();
-               console.log(" BBaby");
+
         unchecked {
             uint256 profileId = ++_profileCounter;
             _mint(vars.to, profileId);

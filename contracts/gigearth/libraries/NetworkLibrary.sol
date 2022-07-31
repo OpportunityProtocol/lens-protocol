@@ -46,7 +46,7 @@ library NetworkLibrary {
 
     struct Service {
         uint256 marketId;
-        address owner;
+        address creator;
         string metadataPtr;
         uint256[] offers;
         uint256 referralShare;
@@ -110,6 +110,7 @@ library NetworkLibrary {
     struct PurchasedServiceMetadata {
         uint256 purchaseId;
         address client;
+        address creator;
         bool exist;
         uint256 timestampPurchased;
         address referral;

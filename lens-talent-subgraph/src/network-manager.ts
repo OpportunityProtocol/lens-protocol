@@ -7,9 +7,22 @@ import {
   ContractOwnershipUpdate,
   ContractCreated
 } from '../generated/NetworkManager/NetworkManager';
-import { Market, Service, PurchasedService, Contract } from '../generated/schema';
+import { Market, Service, PurchasedService, Contract, VerifiedUser } from '../generated/schema';
 
-export function handleUserRegistered(event: UserRegistered): void {}
+export function handleUserRegistered(event: UserRegistered): void {
+  const id = event.params.profileId.toString()
+  let verifiedUser = VerifiedUser.load(id)
+
+  if (!verifiedUser) {
+    verifiedUser = new VerifiedUser(id)
+    verifiedUser.id = event.params.profileId.toString();
+    verifiedUser.address = event.params.registeredAddress;
+    verifiedUser.handle = event.params.lensHandle.toString()
+    verifiedUser.imageURI = event.params.imageURI;
+    verifiedUser.save()
+  }
+}
+
 export function handleServiceCreated(event: ServiceCreated): void {
   const id = event.params.serviceId.toString();
   let service = Service.load(id);
@@ -40,7 +53,9 @@ export function handleServicePurchased(event: ServicePurchased): void {
       newPurchasedService.metadata = '';
     }
 
+
     newPurchasedService.id = id;
+    newPurchasedService.creator = event.params.owner;
     newPurchasedService.client = event.params.purchaser;
     newPurchasedService.datePurchased = new BigInt(20);
     newPurchasedService.purchaseId = event.params.purchaseId;
@@ -53,7 +68,16 @@ export function handleServicePurchased(event: ServicePurchased): void {
   }
 }
 
-export function handleServiceResolved(event: ServiceResolved): void {}
+export function handleServiceResolved(event: ServiceResolved): void {
+  const linkedService = Service.load(event.params.serviceId.toString())
+  const linkedServicePurchaseData = PurchasedService.load(event.params.purchaseId.toString())
+
+  if (linkedServicePurchaseData) {
+    linkedServicePurchaseData.status = 2;
+    linkedServicePurchaseData.save()
+  }
+}
+
 export function handleContractOwnershipUpdate(event: ContractOwnershipUpdate): void {
   const id = event.params.id.toString();
   let contract = Contract.load(id);
@@ -62,6 +86,7 @@ export function handleContractOwnershipUpdate(event: ContractOwnershipUpdate): v
     contract.worker = event.params.worker;
     contract.ownership = event.params.ownership;
     contract.resolutionTimestamp = event.block.timestamp.toString(); //convert to if case
+    contract.amount = event.params.amt;
     contract.save();
   }
 }
@@ -74,7 +99,7 @@ export function handleContractCreated(event: ContractCreated): void {
     contract.id = id;
     contract.employer = event.params.creator;
     contract.marketId = event.params.marketId;
-    contract.metadata = event.params.metadataPtr.toString();
+    contract.metadata = event.params.metadataPtr.toString()
     contract.acceptanceTimestamp = '0';
     contract.worker = new Bytes(0);
     contract.resolutionTimestamp = '0';

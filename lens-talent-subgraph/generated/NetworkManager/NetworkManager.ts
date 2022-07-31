@@ -72,6 +72,10 @@ export class ContractOwnershipUpdate__Params {
   get worker(): Address {
     return this._event.parameters[4].value.toAddress();
   }
+
+  get amt(): BigInt {
+    return this._event.parameters[5].value.toBigInt();
+  }
 }
 
 export class Dispute extends ethereum.Event {
@@ -316,6 +320,14 @@ export class UserRegistered__Params {
   get lensHandle(): Bytes {
     return this._event.parameters[1].value.toBytes();
   }
+
+  get profileId(): BigInt {
+    return this._event.parameters[2].value.toBigInt();
+  }
+
+  get imageURI(): string {
+    return this._event.parameters[3].value.toString();
+  }
 }
 
 export class NetworkManager__getContractDataResultValue0Struct extends ethereum.Tuple {
@@ -391,7 +403,7 @@ export class NetworkManager__getServiceDataResultValue0Struct extends ethereum.T
     return this[0].toBigInt();
   }
 
-  get owner(): Address {
+  get creator(): Address {
     return this[1].toAddress();
   }
 
@@ -433,24 +445,28 @@ export class NetworkManager__getServicePurchaseMetadataResultValue0Struct extend
     return this[1].toAddress();
   }
 
+  get creator(): Address {
+    return this[2].toAddress();
+  }
+
   get exist(): boolean {
-    return this[2].toBoolean();
+    return this[3].toBoolean();
   }
 
   get timestampPurchased(): BigInt {
-    return this[3].toBigInt();
+    return this[4].toBigInt();
   }
 
   get referral(): Address {
-    return this[4].toAddress();
+    return this[5].toAddress();
   }
 
   get offer(): i32 {
-    return this[5].toI32();
+    return this[6].toI32();
   }
 
   get status(): i32 {
-    return this[6].toI32();
+    return this[7].toI32();
   }
 }
 
@@ -459,7 +475,7 @@ export class NetworkManager__getServicesResultValue0Struct extends ethereum.Tupl
     return this[0].toBigInt();
   }
 
-  get owner(): Address {
+  get creator(): Address {
     return this[1].toAddress();
   }
 
@@ -513,20 +529,22 @@ export class NetworkManager__purchaseServiceOfferingInputSigStruct extends ether
 export class NetworkManager__purchasedServiceIdToMetdataResult {
   value0: BigInt;
   value1: Address;
-  value2: boolean;
-  value3: BigInt;
-  value4: Address;
-  value5: i32;
+  value2: Address;
+  value3: boolean;
+  value4: BigInt;
+  value5: Address;
   value6: i32;
+  value7: i32;
 
   constructor(
     value0: BigInt,
     value1: Address,
-    value2: boolean,
-    value3: BigInt,
-    value4: Address,
-    value5: i32,
-    value6: i32
+    value2: Address,
+    value3: boolean,
+    value4: BigInt,
+    value5: Address,
+    value6: i32,
+    value7: i32
   ) {
     this.value0 = value0;
     this.value1 = value1;
@@ -535,22 +553,24 @@ export class NetworkManager__purchasedServiceIdToMetdataResult {
     this.value4 = value4;
     this.value5 = value5;
     this.value6 = value6;
+    this.value7 = value7;
   }
 
   toMap(): TypedMap<string, ethereum.Value> {
     let map = new TypedMap<string, ethereum.Value>();
     map.set("value0", ethereum.Value.fromUnsignedBigInt(this.value0));
     map.set("value1", ethereum.Value.fromAddress(this.value1));
-    map.set("value2", ethereum.Value.fromBoolean(this.value2));
-    map.set("value3", ethereum.Value.fromUnsignedBigInt(this.value3));
-    map.set("value4", ethereum.Value.fromAddress(this.value4));
-    map.set(
-      "value5",
-      ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(this.value5))
-    );
+    map.set("value2", ethereum.Value.fromAddress(this.value2));
+    map.set("value3", ethereum.Value.fromBoolean(this.value3));
+    map.set("value4", ethereum.Value.fromUnsignedBigInt(this.value4));
+    map.set("value5", ethereum.Value.fromAddress(this.value5));
     map.set(
       "value6",
       ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(this.value6))
+    );
+    map.set(
+      "value7",
+      ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(this.value7))
     );
     return map;
   }
@@ -563,24 +583,28 @@ export class NetworkManager__purchasedServiceIdToMetdataResult {
     return this.value1;
   }
 
-  getExist(): boolean {
+  getCreator(): Address {
     return this.value2;
   }
 
-  getTimestampPurchased(): BigInt {
+  getExist(): boolean {
     return this.value3;
   }
 
-  getReferral(): Address {
+  getTimestampPurchased(): BigInt {
     return this.value4;
   }
 
-  getOffer(): i32 {
+  getReferral(): Address {
     return this.value5;
   }
 
-  getStatus(): i32 {
+  getOffer(): i32 {
     return this.value6;
+  }
+
+  getStatus(): i32 {
+    return this.value7;
   }
 }
 
@@ -852,7 +876,7 @@ export class NetworkManager__serviceIdToServiceResult {
     return this.value0;
   }
 
-  getOwner(): Address {
+  getCreator(): Address {
     return this.value1;
   }
 
@@ -928,7 +952,7 @@ export class NetworkManager__servicesResult {
     return this.value0;
   }
 
-  getOwner(): Address {
+  getCreator(): Address {
     return this.value1;
   }
 
@@ -1397,7 +1421,7 @@ export class NetworkManager extends ethereum.SmartContract {
   ): NetworkManager__getServicePurchaseMetadataResultValue0Struct {
     let result = super.call(
       "getServicePurchaseMetadata",
-      "getServicePurchaseMetadata(uint256):((uint256,address,bool,uint256,address,uint8,uint8))",
+      "getServicePurchaseMetadata(uint256):((uint256,address,address,bool,uint256,address,uint8,uint8))",
       [ethereum.Value.fromUnsignedBigInt(purchaseId)]
     );
 
@@ -1413,7 +1437,7 @@ export class NetworkManager extends ethereum.SmartContract {
   > {
     let result = super.tryCall(
       "getServicePurchaseMetadata",
-      "getServicePurchaseMetadata(uint256):((uint256,address,bool,uint256,address,uint8,uint8))",
+      "getServicePurchaseMetadata(uint256):((uint256,address,address,bool,uint256,address,uint8,uint8))",
       [ethereum.Value.fromUnsignedBigInt(purchaseId)]
     );
     if (result.reverted) {
@@ -1603,18 +1627,19 @@ export class NetworkManager extends ethereum.SmartContract {
   ): NetworkManager__purchasedServiceIdToMetdataResult {
     let result = super.call(
       "purchasedServiceIdToMetdata",
-      "purchasedServiceIdToMetdata(uint256):(uint256,address,bool,uint256,address,uint8,uint8)",
+      "purchasedServiceIdToMetdata(uint256):(uint256,address,address,bool,uint256,address,uint8,uint8)",
       [ethereum.Value.fromUnsignedBigInt(param0)]
     );
 
     return new NetworkManager__purchasedServiceIdToMetdataResult(
       result[0].toBigInt(),
       result[1].toAddress(),
-      result[2].toBoolean(),
-      result[3].toBigInt(),
-      result[4].toAddress(),
-      result[5].toI32(),
-      result[6].toI32()
+      result[2].toAddress(),
+      result[3].toBoolean(),
+      result[4].toBigInt(),
+      result[5].toAddress(),
+      result[6].toI32(),
+      result[7].toI32()
     );
   }
 
@@ -1623,7 +1648,7 @@ export class NetworkManager extends ethereum.SmartContract {
   ): ethereum.CallResult<NetworkManager__purchasedServiceIdToMetdataResult> {
     let result = super.tryCall(
       "purchasedServiceIdToMetdata",
-      "purchasedServiceIdToMetdata(uint256):(uint256,address,bool,uint256,address,uint8,uint8)",
+      "purchasedServiceIdToMetdata(uint256):(uint256,address,address,bool,uint256,address,uint8,uint8)",
       [ethereum.Value.fromUnsignedBigInt(param0)]
     );
     if (result.reverted) {
@@ -1634,11 +1659,12 @@ export class NetworkManager extends ethereum.SmartContract {
       new NetworkManager__purchasedServiceIdToMetdataResult(
         value[0].toBigInt(),
         value[1].toAddress(),
-        value[2].toBoolean(),
-        value[3].toBigInt(),
-        value[4].toAddress(),
-        value[5].toI32(),
-        value[6].toI32()
+        value[2].toAddress(),
+        value[3].toBoolean(),
+        value[4].toBigInt(),
+        value[5].toAddress(),
+        value[6].toI32(),
+        value[7].toI32()
       )
     );
   }
