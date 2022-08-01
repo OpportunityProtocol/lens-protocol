@@ -1,0 +1,83 @@
+
+ÉÁdataSources:
+  - kind: ethereum
+    mapping:
+      abis:
+        - file:
+            /: /ipfs/QmPXLM6QPPKBGaTPbYxZLtmiWdzeLt6wTG15S6NK7HFjnX
+          name: NetworkManager
+      apiVersion: 0.0.5
+      entities:
+        - VerifiedUser
+        - Service
+        - PurchasedService
+        - Contract
+        - Market
+      eventHandlers:
+        - event: >-
+            UserRegistered(indexed address,indexed string,indexed
+            uint256,string)
+          handler: handleUserRegistered
+        - event: >-
+            ServiceCreated(indexed uint256,indexed uint256,indexed
+            address,uint256[],string,uint256)
+          handler: handleServiceCreated
+        - event: >-
+            ServicePurchased(indexed uint256,uint256,uint256,indexed
+            address,indexed address,address,uint256)
+          handler: handleServicePurchased
+        - event: >-
+            ServiceResolved(indexed address,indexed address,indexed
+            uint256,uint256,uint8)
+          handler: handleServiceResolved
+        - event: >-
+            ContractCreated(uint256,indexed address,indexed uint256,indexed
+            string)
+          handler: handleContractCreated
+        - event: >-
+            ContractOwnershipUpdate(indexed uint256,indexed uint256,indexed
+            uint8,address,address,uint256)
+          handler: handleContractOwnershipUpdate
+      file:
+        /: /ipfs/QmQNq49tw1MPeH3fjdfxK6bbAQEx35BgbRiKDsTG1kGSnt
+      kind: ethereum/events
+      language: wasm/assemblyscript
+    name: NetworkManager
+    network: localhost
+    source:
+      abi: NetworkManager
+      address: '0xe508652f4AA61383dA8Fe6Da6776B1E392B0C512'
+      startBlock: 26362114
+  - kind: ethereum
+    mapping:
+      abis:
+        - file:
+            /: /ipfs/QmNamEFvUDozm9PPjmSnTdCCiFDxW8iYfVJXYb9D7ry7yr
+          name: TokenFactory
+      apiVersion: 0.0.5
+      entities:
+        - Market
+        - ServiceToken
+      eventHandlers:
+        - event: 'NewToken(uint256,uint256,string,address,address)'
+          handler: handleNewServiceToken
+        - event: >-
+            NewMarket(uint256,string,uint256,uint256,uint256,uint256,uint256,bool,address)
+          handler: handleNewMarket
+      file:
+        /: /ipfs/QmRY2517bWMTSFXp6NoVccvzcvoR2XRyGyRLYpZmcjUYLq
+      kind: ethereum/events
+      language: wasm/assemblyscript
+    name: TokenFactory
+    network: localhost
+    source:
+      abi: TokenFactory
+      address: '0x43DF7F21470312014851C989FF1b088429334ee4'
+      startBlock: 26362114
+features:
+  - ipfsOnEthereumContracts
+schema:
+  file:
+    /: /ipfs/QmNv9FWcaGmipezoVtfAim5hawVRJdswQRj1ecsKfdKVUw
+specVersion: 0.0.4
+Á

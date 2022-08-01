@@ -2,6 +2,9 @@
   "localhost": {
     "NetworkManager": {
       "address": "0xe508652f4AA61383dA8Fe6Da6776B1E392B0C512"
+    },
+    "TokenFactory": {
+      "address": "0x43DF7F21470312014851C989FF1b088429334ee4"
     }
   }
 }

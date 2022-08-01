@@ -207,6 +207,16 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     })
   );
 
+  await hre.run("graph", { 
+    contractName: "NetworkManager", 
+    address: networkManager.address 
+  });
+
+  await hre.run("graph", { 
+    contractName: "TokenFactory", 
+    address: tokenFactory.address 
+  });
+
   // Deploy collect modules
   console.log('\n\t-- Deploying feeCollectModule --');
   const feeCollectModule = await deployContract(

@@ -10,6 +10,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
 import {IAToken} from "@aave/core-v3/contracts/interfaces/IAToken.sol";
+import "hardhat/console.sol";
+
 
 /**
  * @title InterestManagerAave
@@ -52,7 +54,7 @@ contract InterestManagerAave is Ownable, Initializable {
     }
 
     /**
-     * Invests a given amount of Dai into Compound
+     * Invests a given amount of Dai into Aave
      * The Dai have to be transfered to this contract before this function is called
      *
      * @param amount The amount of Dai to invest
@@ -67,16 +69,23 @@ contract InterestManagerAave is Ownable, Initializable {
         uint balanceAfter = _cDai.balanceOf(address(this));
         return balanceAfter.sub(balanceBefore);*/
 
+        console.log('AAVE IS NOW INVESTING: ', amount);
+
         uint balanceBefore = _aDai.balanceOf(address(this));
+        console.log("IAM aDai balance before supply ", balanceBefore);
+        console.log("IAM dai balance  before supply", _dai.balanceOf(address(this)));
         require(_dai.balanceOf(address(this)) >= amount, "insufficient-dai");
         require(_dai.approve(address(_pool), amount), "dai-aavepool-approve");
         _pool.supply(address(_dai), amount, address(this), 0);
+
         uint balanceAfter = _aDai.balanceOf(address(this));
+                 console.log("IAM aDai balance after supply ", balanceAfter);
+        console.log("IAM dai balance  after supply", _dai.balanceOf(address(this)));
         return balanceAfter.sub(balanceBefore);
     }
 
     /**
-     * Redeems a given amount of Dai from Compound and sends it to the recipient
+     * Redeems a given amount of Dai from Aave and sends it to the recipient
      *
      * @param recipient The recipient of the redeemed Dai
      * @param amount The amount of Dai to redeem
@@ -91,8 +100,12 @@ contract InterestManagerAave is Ownable, Initializable {
         return balanceBefore.sub(balanceAfter);*/
 
         uint balanceBefore = _aDai.balanceOf(address(this));
-        _pool.withdraw(address(_dai), amount, recipient);
+         console.log("InterestManagerAAVE DAI balance before withdraw: ", _dai.balanceOf(address(this)));
+        console.log("InterestManagerAAVE aDai Balance before withdraw: ", balanceBefore);
+        _pool.withdraw(address(_dai), amount, address(this));
         uint balanceAfter = _aDai.balanceOf(address(this));
+        console.log("InterestManagerAAVE aDai Balance after withraw: ", balanceAfter);
+        console.log("InterestManagerAAVE DAI balance after withdraw: ", _dai.balanceOf(address(this)));
         require(_dai.transfer(recipient, amount), "dai-transfer");
         return balanceAfter;
     }

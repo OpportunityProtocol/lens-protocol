@@ -442,6 +442,74 @@ export class Contract extends Entity {
   }
 }
 
+export class ServiceToken extends Entity {
+  constructor(id: string) {
+    super();
+    this.set("id", Value.fromString(id));
+  }
+
+  save(): void {
+    let id = this.get("id");
+    assert(id != null, "Cannot save ServiceToken entity without an ID");
+    if (id) {
+      assert(
+        id.kind == ValueKind.STRING,
+        `Entities of type ServiceToken must have an ID of type String but the id '${id.displayData()}' is of type ${id.displayKind()}`
+      );
+      store.set("ServiceToken", id.toString(), this);
+    }
+  }
+
+  static load(id: string): ServiceToken | null {
+    return changetype<ServiceToken | null>(store.get("ServiceToken", id));
+  }
+
+  get id(): string {
+    let value = this.get("id");
+    return value!.toString();
+  }
+
+  set id(value: string) {
+    this.set("id", Value.fromString(value));
+  }
+
+  get marketID(): BigInt {
+    let value = this.get("marketID");
+    return value!.toBigInt();
+  }
+
+  set marketID(value: BigInt) {
+    this.set("marketID", Value.fromBigInt(value));
+  }
+
+  get name(): string {
+    let value = this.get("name");
+    return value!.toString();
+  }
+
+  set name(value: string) {
+    this.set("name", Value.fromString(value));
+  }
+
+  get address(): Bytes {
+    let value = this.get("address");
+    return value!.toBytes();
+  }
+
+  set address(value: Bytes) {
+    this.set("address", Value.fromBytes(value));
+  }
+
+  get lister(): Bytes {
+    let value = this.get("lister");
+    return value!.toBytes();
+  }
+
+  set lister(value: Bytes) {
+    this.set("lister", Value.fromBytes(value));
+  }
+}
+
 export class Market extends Entity {
   constructor(id: string) {
     super();
@@ -480,5 +548,59 @@ export class Market extends Entity {
 
   set name(value: string) {
     this.set("name", Value.fromString(value));
+  }
+
+  get baseCost(): BigInt {
+    let value = this.get("baseCost");
+    return value!.toBigInt();
+  }
+
+  set baseCost(value: BigInt) {
+    this.set("baseCost", Value.fromBigInt(value));
+  }
+
+  get priceRise(): BigInt {
+    let value = this.get("priceRise");
+    return value!.toBigInt();
+  }
+
+  set priceRise(value: BigInt) {
+    this.set("priceRise", Value.fromBigInt(value));
+  }
+
+  get hatchTokens(): BigInt {
+    let value = this.get("hatchTokens");
+    return value!.toBigInt();
+  }
+
+  set hatchTokens(value: BigInt) {
+    this.set("hatchTokens", Value.fromBigInt(value));
+  }
+
+  get tradingFeeRate(): BigInt {
+    let value = this.get("tradingFeeRate");
+    return value!.toBigInt();
+  }
+
+  set tradingFeeRate(value: BigInt) {
+    this.set("tradingFeeRate", Value.fromBigInt(value));
+  }
+
+  get platformFeeRate(): BigInt {
+    let value = this.get("platformFeeRate");
+    return value!.toBigInt();
+  }
+
+  set platformFeeRate(value: BigInt) {
+    this.set("platformFeeRate", Value.fromBigInt(value));
+  }
+
+  get allInterestToPlatform(): boolean {
+    let value = this.get("allInterestToPlatform");
+    return value!.toBoolean();
+  }
+
+  set allInterestToPlatform(value: boolean) {
+    this.set("allInterestToPlatform", Value.fromBoolean(value));
   }
 }

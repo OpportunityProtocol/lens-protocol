@@ -151,7 +151,6 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
 
         require(amounts.total >= minPrice, 'below-min-price');
         require(IServiceToken(serviceToken).balanceOf(msg.sender) >= amount, 'insufficient-tokens');
-
         IServiceToken(serviceToken).burn(msg.sender, amount);
 
         ExchangeInfo storage exchangeInfo;
@@ -173,7 +172,6 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
             uint256 platformFeeRedeemed = _interestManager.underlyingToInvestmentToken(
                 amounts.platformFee
             );
-
             invested = exchangeInfo.invested.sub(
                 totalRedeemed.add(tradingFeeRedeemed).add(platformFeeRedeemed)
             );
@@ -374,13 +372,16 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         exchangeInfo.invested = exchangeInfo.invested.add(
             _interestManager.underlyingToInvestmentToken(amounts.raw)
         );
+
         uint256 tradingFeeInvested = _tradingFeeInvested.add(
             _interestManager.underlyingToInvestmentToken(amounts.tradingFee)
         );
         _tradingFeeInvested = tradingFeeInvested;
+
         uint256 platformFeeInvested = _platformFeeInvested[marketID].add(
             _interestManager.underlyingToInvestmentToken(amounts.platformFee)
         );
+
         _platformFeeInvested[marketID] = platformFeeInvested;
         exchangeInfo.dai = exchangeInfo.dai.add(amounts.raw);
 
@@ -411,14 +412,10 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         override
         returns (uint256)
     {
-        console.log("Started");
-        console.log("Token address: ", serviceToken);
-        console.log("Amount: ", amount);
-        console.log("Token factory address: ", address(_tokenFactory));
         uint256 marketID = _tokenFactory.getMarketIDByTokenAddress(serviceToken);
-        console.log("Found market ID");
+
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID(marketID);
-                console.log("Found market details?");
+
         return
             getCostsForBuyingTokens(
                 marketDetails,
@@ -437,13 +434,12 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
      *
      * @return total cost, raw cost, trading fee, platform fee
      */
-     //Conver to pure after removing console.log
     function getCostsForBuyingTokens(
         MarketDetails memory marketDetails,
         uint256 supply,
         uint256 amount,
         bool feesDisabled
-    ) public view virtual override returns (CostAndPriceAmounts memory) {
+    ) public pure virtual override returns (CostAndPriceAmounts memory) {
         uint256 rawCost = getRawCostForBuyingTokens(
             marketDetails.baseCost,
             marketDetails.priceRise,
@@ -451,7 +447,6 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
             supply,
             amount
         );
-        console.log("got raw cost");
 
         uint256 tradingFee = 0;
         uint256 platformFee = 0;
@@ -460,9 +455,9 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
             tradingFee = rawCost.mul(marketDetails.tradingFeeRate).div(FEE_SCALE);
             platformFee = rawCost.mul(marketDetails.platformFeeRate).div(FEE_SCALE);
         }
-console.log("uhhh");
+
         uint256 totalCost = rawCost.add(tradingFee).add(platformFee);
-    console.log("total cost  ", totalCost);
+
         return
             CostAndPriceAmounts({
                 total: totalCost,

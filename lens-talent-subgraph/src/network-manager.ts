@@ -101,6 +101,7 @@ export function handleContractCreated(event: ContractCreated): void {
     contract.marketId = event.params.marketId;
     contract.metadata = event.params.metadataPtr.toString()
     contract.acceptanceTimestamp = '0';
+    contract.amount = new BigInt(0)
     contract.worker = new Bytes(0);
     contract.resolutionTimestamp = '0';
     contract.ownership = 0;

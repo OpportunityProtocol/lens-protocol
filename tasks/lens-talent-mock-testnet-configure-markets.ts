@@ -111,10 +111,10 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
 
     //create contracts
 
-    // await networkManager.connect(signers[1])
-    // .createContract(1, 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu')
+    await networkManager.connect(signers[1])
+    .createContract(1, 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu')
 
-    // await networkManager.connect(admin).createContract(1, 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu')
+    await networkManager.connect(admin).createContract(1, 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu')
 
     console.log('Minting dai...')
     await dai.functions['mint(uint256)'](10000)

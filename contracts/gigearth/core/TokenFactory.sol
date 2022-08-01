@@ -13,8 +13,8 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "hardhat/console.sol";
 import "../interface/INetworkManager.sol";
 /**
- * @title ITokenFactory (Originally: IdeaTokenFactory)
- * @author Alexander Schlindwein
+ * @title TokenFactory (Original: IdeaTokenFactory)
+ * @author Elijah Hampton (Original: Alexander Schlindwein)
  *
  * Manages the creation of markets and ServiceTokens
  * Sits behind an AdminUpgradabilityProxy
