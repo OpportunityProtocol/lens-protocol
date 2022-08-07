@@ -29,7 +29,6 @@ struct MarketDetails {
     uint id;
     string name;
 
-    ITokenNameVerifier nameVerifier;
     uint numTokens;
 
     uint baseCost;

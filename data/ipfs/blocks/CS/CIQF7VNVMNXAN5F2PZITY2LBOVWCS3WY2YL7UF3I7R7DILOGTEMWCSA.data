@@ -78,6 +78,6 @@ features:
   - ipfsOnEthereumContracts
 schema:
   file:
-    /: /ipfs/QmNv9FWcaGmipezoVtfAim5hawVRJdswQRj1ecsKfdKVUw
+    /: /ipfs/QmPrDfQieYZknP3gXnDHeRFM6qbXeB3NsfiKrQTv4KC1Pm
 specVersion: 0.0.4
 Á

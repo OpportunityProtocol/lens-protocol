@@ -10,7 +10,7 @@ import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import {SafeERC20} from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import {IERC721} from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import {DataTypes} from '../../libraries/DataTypes.sol';
-import "hardhat/console.sol";
+import 'hardhat/console.sol';
 
 /**
  * @notice A struct containing the necessary data to execute collect actions on a publication.
@@ -31,7 +31,7 @@ struct PaymentProcessingData {
 }
 
 interface INetworkManager {
-    function getProtocolFee() external view returns(uint);
+    function getProtocolFee() external view returns (uint256);
 }
 
 /**
@@ -50,13 +50,17 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
 
     mapping(address => mapping(address => bool)) _ownerToClientToRelationshipConfirmation;
 
-    modifier onlyNetworkManager {
-        require(msg.sender == address(_lensTalentNetworkManager), "only network manager");
+    modifier onlyNetworkManager() {
+        require(msg.sender == address(_lensTalentNetworkManager), 'only network manager');
         _;
     }
 
-    constructor(address hub, address moduleGlobals, address lensTalentNetworkManager) FeeModuleBase(moduleGlobals) ModuleBase(hub) {
-        require(lensTalentNetworkManager != address(0), "invalid params");
+    constructor(
+        address hub,
+        address moduleGlobals,
+        address lensTalentNetworkManager
+    ) FeeModuleBase(moduleGlobals) ModuleBase(hub) {
+        require(lensTalentNetworkManager != address(0), 'invalid params');
         _lensTalentNetworkManager = INetworkManager(lensTalentNetworkManager);
     }
 
@@ -115,6 +119,8 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
         uint256 pubId,
         bytes calldata data
     ) external virtual override onlyHub {
+        //TODO: Proof owner to client relationship
+
         if (referrerProfileId == profileId) {
             _processCollect(collector, profileId, pubId, data);
         } else {
@@ -148,7 +154,10 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
         uint256 amount = _dataByPublicationByProfile[profileId][pubId].amount;
         address currency = _dataByPublicationByProfile[profileId][pubId].currency;
 
-        (address decodedCurrency, uint256 decodedAmount, uint8 decodedPackage) = abi.decode(data, (address, uint256, uint8));
+        (address decodedCurrency, uint256 decodedAmount, uint8 decodedPackage) = abi.decode(
+            data,
+            (address, uint256, uint8)
+        );
 
         _validateDataIsExpected(data, currency, amount);
 
@@ -157,7 +166,11 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
         IERC20(currency).safeTransferFrom(collector, address(this), fee);
     }
 
-    function releaseCollectedFunds(uint256 profileId, uint256 pubId, uint8 package) external onlyNetworkManager {
+    function releaseCollectedFunds(
+        uint256 profileId,
+        uint256 pubId,
+        uint8 package
+    ) external onlyNetworkManager {
         uint256 amount = _dataByPublicationByProfile[profileId][pubId].packages[package];
         address currency = _dataByPublicationByProfile[profileId][pubId].currency;
         address recipient = _dataByPublicationByProfile[profileId][pubId].recipient;
@@ -168,12 +181,14 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
         if (treasuryAmount > 0) {
             IERC20(currency).transfer(address(_lensTalentNetworkManager), treasuryAmount);
         }
-
-        //TODO: Proof owner to client relationship
-        // _ownerToClientToRelationshipConfirmation[]
     }
 
-    function emergencyReleaseDisputedFunds(uint256 profileId, uint256 pubId, address recipient, uint8 package) external onlyNetworkManager {
+    function emergencyReleaseDisputedFunds(
+        uint256 profileId,
+        uint256 pubId,
+        address recipient,
+        uint8 package
+    ) external onlyNetworkManager {
         uint256 amount = _dataByPublicationByProfile[profileId][pubId].packages[package];
         address currency = _dataByPublicationByProfile[profileId][pubId].currency;
         address recipient = _dataByPublicationByProfile[profileId][pubId].recipient;
@@ -182,12 +197,13 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
 
         IERC20(currency).safeTransferFrom(address(this), recipient, adjustedAmount);
         if (treasuryAmount > 0) {
-            IERC20(currency).safeTransferFrom(address(this), address(_lensTalentNetworkManager), treasuryAmount);
+            IERC20(currency).safeTransferFrom(
+                address(this),
+                address(_lensTalentNetworkManager),
+                treasuryAmount
+            );
         }
     }
-
-        function getServiceCo(uint256 profileId, uint256 pubId, address recipient, uint8 package) external onlyNetworkManager {
-        }
 
     function _processCollectWithReferral(
         uint256 referrerProfileId,
@@ -224,6 +240,10 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
 
         IERC20(currency).safeTransferFrom(collector, recipient, adjustedAmount);
         if (treasuryAmount > 0)
-            IERC20(currency).safeTransferFrom(collector, address(_lensTalentNetworkManager), treasuryAmount);
+            IERC20(currency).safeTransferFrom(
+                collector,
+                address(_lensTalentNetworkManager),
+                treasuryAmount
+            );
     }
 }

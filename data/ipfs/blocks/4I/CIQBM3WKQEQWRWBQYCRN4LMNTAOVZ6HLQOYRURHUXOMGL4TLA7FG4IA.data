@@ -1,5 +1,5 @@
 
-ÒÊtype ExampleEntity @entity {
+øðtype ExampleEntity @entity {
   id: ID!
   count: BigInt!
   fee: Int! # uint24
@@ -65,4 +65,8 @@ type Market @entity {
   tradingFeeRate: BigInt!
   platformFeeRate: BigInt!
   allInterestToPlatform: Boolean!
-}Ê
+}
+
+type TokenInfo @entity {
+  id: ID!
+}ð

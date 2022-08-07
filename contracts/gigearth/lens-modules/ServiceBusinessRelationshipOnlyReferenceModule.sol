@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: MIT
 
 pragma solidity 0.8.10;
 
@@ -8,13 +8,13 @@ import {FollowValidationModuleBase} from '../FollowValidationModuleBase.sol';
 import {IERC721} from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 
 /**
- * @title FollowerOnlyReferenceModule
+ * @title ServiceBusinessRelationshipOnlyReferenceModule
  * @author Lens Protocol
  *
  * @notice A simple reference module that validates that comments or mirrors originate from a profile owned
  * by a follower.
  */
-contract GigEarthContentReferenceModule is FollowValidationModuleBase, IReferenceModule {
+contract ServiceBusinessRelationshipOnlyReferenceModule is FollowValidationModuleBase, IReferenceModule {
     constructor(address hub) ModuleBase(hub) {}
 
     /**

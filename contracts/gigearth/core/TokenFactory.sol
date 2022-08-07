@@ -8,7 +8,6 @@ import "../util/Ownable.sol";
 import "../interface/ITokenFactory.sol";
 import "./ServiceToken.sol";
 import "../interface/IServiceToken.sol";
-import "../interface/ITokenNameVerifier.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "hardhat/console.sol";
 import "../interface/INetworkManager.sol";
@@ -65,13 +64,11 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
                     uint hatchTokens,
                     uint tradingFeeRate,
                     uint platformFeeRate,
-                    bool allInterestToPlatform,
-                    address nameVerifier);
+                    bool allInterestToPlatform);
 
     event NewToken(uint id, uint marketID, string name, address addr, address lister);
     event NewTradingFee(uint marketID, uint tradingFeeRate);
     event NewPlatformFee(uint marketID, uint platformFeeRate);
-    event NewNameVerifier(uint marketID, address nameVerifier);
 
     modifier onlyNetworkManager() {
         require(msg.sender == _networkManager, "sender is not network manager");
@@ -122,7 +119,6 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
                 exists: true,
                 id: marketID,
                 name: marketName,
-                nameVerifier: ITokenNameVerifier(address(0)),
                 numTokens: 0,
                 baseCost: baseCost,
                 priceRise: priceRise,
@@ -146,8 +142,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
                        marketDetails.hatchTokens,
                        marketDetails.tradingFeeRate,
                        marketDetails.platformFeeRate,
-                       marketDetails.allInterestToPlatform,
-                       address(marketDetails.nameVerifier));
+                       marketDetails.allInterestToPlatform);
     }
 
     /**
@@ -202,7 +197,7 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
         MarketInfo storage marketInfo = _markets[marketID];
         MarketDetails storage marketDetails =  _marketDetails[marketID];
 
-        if(marketInfo.tokenNameUsed[tokenName] || !marketDetails.nameVerifier.verifyTokenName(tokenName)) {
+        if(marketInfo.tokenNameUsed[tokenName]) {
             return false;
         }
 
@@ -320,23 +315,6 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
         marketDetails.platformFeeRate = platformFeeRate;
 
         emit NewPlatformFee(marketID, platformFeeRate);
-    }
-
-    /**
-     * Changes the address of the name verifier for a market
-     * May only be called by the owner
-     *
-     * @param marketID The marketID for which to change the name verifier
-     * @param nameVerifier The new name verifier address
-     */
-    function setNameVerifier(uint marketID, address nameVerifier) external virtual override onlyOwner {
-        require(nameVerifier != address(0), "zero-verifier");
-
-        MarketDetails storage marketDetails =  _marketDetails[marketID];
-        require(marketDetails.exists, "market-not-exist");
-        marketDetails.nameVerifier = ITokenNameVerifier(nameVerifier);
-
-        emit NewNameVerifier(marketID, nameVerifier);
     }
 
     function getMarketIDByTokenAddress(address tokenAddress) external virtual view override returns(uint) {

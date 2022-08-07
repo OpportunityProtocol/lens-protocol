@@ -65,3 +65,7 @@ type Market @entity {
   platformFeeRate: BigInt!
   allInterestToPlatform: Boolean!
 }
+
+type TokenInfo @entity {
+  id: ID!
+}
