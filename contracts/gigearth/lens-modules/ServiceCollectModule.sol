@@ -12,26 +12,26 @@ import {IERC721} from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import {DataTypes} from '../../libraries/DataTypes.sol';
 import 'hardhat/console.sol';
 
+interface INetworkManager {
+    function getProtocolFee() external view returns (uint256);
+
+    function isFamiliar(address employer, uint256 serviceId) external returns (bool);
+}
+
 /**
  * @notice A struct containing the necessary data to execute collect actions on a publication.
  *
  * @param amount The collecting cost associated with this publication.
  * @param currency The currency associated with this publication.
  * @param recipient The recipient address associated with this publication.
- * @param referralFee The referral fee associated with this publication.
  * @param followerOnly Whether only followers should be able to collect.
  */
 struct PaymentProcessingData {
     uint256 amount;
     address currency;
     address recipient;
-    uint16 referralFee;
     uint256 serviceId;
     uint256[] packages;
-}
-
-interface INetworkManager {
-    function getProtocolFee() external view returns (uint256);
 }
 
 /**
@@ -48,8 +48,6 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
     mapping(uint256 => mapping(uint256 => PaymentProcessingData))
         internal _dataByPublicationByProfile;
 
-    mapping(address => mapping(address => bool)) _ownerToClientToRelationshipConfirmation;
-
     modifier onlyNetworkManager() {
         require(msg.sender == address(_lensTalentNetworkManager), 'only network manager');
         _;
@@ -65,7 +63,6 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
     }
 
     /**
-     * @notice This collect module levies a fee on collects and supports referrals. Thus, we need to decode data.
      *
      * @param profileId The token ID of the profile of the publisher, passed by the hub.
      * @param pubId The publication ID of the newly created publication, passed by the hub.
@@ -73,7 +70,6 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
      *      uint256 amount: The currency total amount to levy.
      *      address currency: The currency address, must be internally whitelisted.
      *      address recipient: The custom recipient address to direct earnings to.
-     *      uint16 referralFee: The referral fee to set.
      *
      * @return bytes An abi encoded bytes parameter, which is the same as the passed data parameter.
      */
@@ -82,17 +78,11 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
         uint256 pubId,
         bytes calldata data
     ) external override onlyHub returns (bytes memory) {
-        (
-            uint256[] memory amount,
-            address currency,
-            address recipient,
-            uint16 referralFee,
-            uint256 serviceId
-        ) = abi.decode(data, (uint256[], address, address, uint16, uint256));
+        (uint256[] memory amount, address currency, address recipient, uint256 serviceId) = abi
+            .decode(data, (uint256[], address, address, uint256));
         /*if (
             !_currencyWhitelisted(currency) ||
             recipient == address(0) ||
-            referralFee > BPS_MAX ||
             amount[0] == 0 ||
             amount[1] == 0 ||
             amount[2] == 0
@@ -102,15 +92,13 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
         _dataByPublicationByProfile[profileId][pubId].amount = amount[0];
         _dataByPublicationByProfile[profileId][pubId].currency = currency;
         _dataByPublicationByProfile[profileId][pubId].recipient = recipient;
-        _dataByPublicationByProfile[profileId][pubId].referralFee = referralFee;
         _dataByPublicationByProfile[profileId][pubId].serviceId = serviceId;
         return data;
     }
 
     /**
      * @dev Processes a collect by:
-     *  1. Ensuring the collector is a follower
-     *  2. Charging a fee
+     *  1. Charging service purchase fee
      */
     function processCollect(
         uint256 referrerProfileId,
@@ -119,12 +107,8 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
         uint256 pubId,
         bytes calldata data
     ) external virtual override onlyHub {
-        //TODO: Proof owner to client relationship
-
         if (referrerProfileId == profileId) {
             _processCollect(collector, profileId, pubId, data);
-        } else {
-            _processCollectWithReferral(referrerProfileId, collector, profileId, pubId, data);
         }
     }
 
@@ -203,47 +187,5 @@ contract ServiceCollectModule is FeeModuleBase, ModuleBase, ICollectModule {
                 treasuryAmount
             );
         }
-    }
-
-    function _processCollectWithReferral(
-        uint256 referrerProfileId,
-        address collector,
-        uint256 profileId,
-        uint256 pubId,
-        bytes calldata data
-    ) internal {
-        uint256 amount = _dataByPublicationByProfile[profileId][pubId].amount;
-        address currency = _dataByPublicationByProfile[profileId][pubId].currency;
-        _validateDataIsExpected(data, currency, amount);
-
-        uint256 referralFee = _dataByPublicationByProfile[profileId][pubId].referralFee;
-        uint256 treasuryAmount;
-
-        // Avoids stack too deep
-        {
-            treasuryAmount = (amount * _lensTalentNetworkManager.getProtocolFee()) / BPS_MAX;
-        }
-
-        uint256 adjustedAmount = amount - treasuryAmount;
-
-        if (referralFee != 0) {
-            // The reason we levy the referral fee on the adjusted amount is so that referral fees
-            // don't bypass the treasury fee, in essence referrals pay their fair share to the treasury.
-            uint256 referralAmount = (adjustedAmount * referralFee) / BPS_MAX;
-            adjustedAmount = adjustedAmount - referralAmount;
-
-            address referralRecipient = IERC721(HUB).ownerOf(referrerProfileId);
-
-            IERC20(currency).safeTransferFrom(collector, referralRecipient, referralAmount);
-        }
-        address recipient = _dataByPublicationByProfile[profileId][pubId].recipient;
-
-        IERC20(currency).safeTransferFrom(collector, recipient, adjustedAmount);
-        if (treasuryAmount > 0)
-            IERC20(currency).safeTransferFrom(
-                collector,
-                address(_lensTalentNetworkManager),
-                treasuryAmount
-            );
     }
 }

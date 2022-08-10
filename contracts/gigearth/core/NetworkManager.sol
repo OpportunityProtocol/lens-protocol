@@ -50,9 +50,8 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      * @param serviceId The id of the service
      * @param owner The owner of the service
      * @param purchaser The address purchasing the service
-     * @param referral The referral for the purchase, if any
      */
-    event ServicePurchased(uint256 indexed serviceId, uint256 purchaseId, uint256 pubId, address indexed owner, address indexed purchaser, address referral, uint256 offer);
+    event ServicePurchased(uint256 indexed serviceId, uint256 purchaseId, uint256 pubId, address indexed owner, address indexed purchaser, uint256 offer);
 
     /**
      * Emitted whena  service is resolved
@@ -119,6 +118,8 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     mapping(uint256 => uint256) public serviceIDToMarketID;
     mapping(uint256 => uint256) public serviceIdToPublicationId;
     mapping(uint256 => uint256) public serviceIdToPurchaseId;
+
+    mapping(address => mapping(uint256 => bool)) public workRelationshipToStatus;
 
     address[] public verifiedFreelancers;
 
@@ -200,6 +201,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         // /************ END MAINNET AND LOCAL ONLY ***************/
 
         uint256 profileId = lensHub.getProfileIdByHandle(registeredHandle);
+        lensHub.setDispatcher(profileId, msg.sender);
 
         addressToLensProfileId[msg.sender] = profileId;
         verifiedFreelancers.push(msg.sender);
@@ -223,14 +225,13 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      * @param marketId The market id the service belongs to
      * @param metadataPtr The ipfs hash for the metadata storage
      * @param offers The cost of the service
-     * @param referralSharePayout The share to payout to the referral address
      */
     function createService(
         uint256 marketId,
         string calldata metadataPtr, 
         uint256[] calldata offers, 
-        uint256 referralSharePayout,
-        address lensTalentServiceCollectModule
+        address lensTalentServiceCollectModule,
+        address lensTalentReferenceModule
     ) public returns(uint) {
 
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID(marketId);
@@ -241,9 +242,9 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
             profileId: addressToLensProfileId[msg.sender],
             contentURI: metadataPtr,
             collectModule: lensTalentServiceCollectModule,
-            collectModuleInitData: abi.encode(offers, address(_dai), msg.sender, referralSharePayout, serviceId),
-            referenceModule: LENS_CONTENT_REFERENCE_MODULE,
-            referenceModuleInitData: abi.encode(serviceId)
+            collectModuleInitData: abi.encode(offers, address(_dai), msg.sender, serviceId),
+            referenceModule: lensTalentReferenceModule,
+            referenceModuleInitData:  abi.encode(serviceId, msg.sender)
         }));
 
         NetworkLibrary.Service memory newService = NetworkLibrary.Service({
@@ -253,8 +254,8 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
             offers: offers,
             id: serviceId,
             exist: true,
-            referralShare: referralSharePayout,
             collectModule: lensTalentServiceCollectModule,
+            referenceModule: lensTalentReferenceModule,
             pubId: pubId
         });
 
@@ -274,11 +275,9 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     /**
      * Purchases a service offering
      * @param serviceId The id of the service to purchase
-     * @param referral The referrer of the contract
      */
     function purchaseServiceOffering(
         uint256 serviceId, 
-        address referral,
         uint8 offerIndex,
         DataTypes.EIP712Signature calldata sig
         ) public notServiceOwner returns(uint) {
@@ -290,7 +289,6 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
             client: msg.sender,
             creator: service.creator,
             timestampPurchased: block.timestamp,
-            referral: referral,
             purchaseId: _claimedServiceCounter,
             offer: offerIndex,
             status: NetworkLibrary.ServiceResolutionStatus.PENDING
@@ -309,7 +307,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
 
         lensHub.collectWithSig(collectWithSigData);
 
-        emit ServicePurchased(serviceId, _claimedServiceCounter, serviceIdToPublicationId[serviceId], service.creator, msg.sender, referral, offerIndex);
+        emit ServicePurchased(serviceId, _claimedServiceCounter, serviceIdToPublicationId[serviceId], service.creator, msg.sender, offerIndex);
         return _claimedServiceCounter;
     }
 
@@ -329,7 +327,19 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         IServiceCollectModule(service.collectModule).releaseCollectedFunds(addressToLensProfileId[service.creator], serviceIdToPublicationId[service.id], metadata.offer);
         metadata.status = NetworkLibrary.ServiceResolutionStatus.RESOLVED;
 
+        workRelationshipToStatus[msg.sender][serviceId] = true;
+
        emit ServiceResolved(service.creator, msg.sender, purchaseId, serviceId, metadata.offer);
+    }
+
+    /**
+     * Provides a status that two parties have worked together in the past.
+     * @notice Only for services
+     * @param employer The purchaser of the service
+     * @param serviceId The service id of the purchased and fulfilled service
+     */
+    function isFamiliar(address employer, uint256 serviceId) external returns(bool) {
+        return workRelationshipToStatus[employer][serviceId];
     }
 
     ///////////////////////////////////////////// Gig Functions
@@ -720,4 +730,6 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     function getServicePurchaseMetadata(uint256 purchaseId) public view returns(NetworkLibrary.PurchasedServiceMetadata memory) {
         return purchasedServiceIdToMetdata[purchaseId];
     }
+
+
 }

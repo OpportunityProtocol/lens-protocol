@@ -49,10 +49,10 @@ library NetworkLibrary {
         address creator;
         string metadataPtr;
         uint256[] offers;
-        uint256 referralShare;
         bool exist;
         uint256 id;
         address collectModule;
+        address referenceModule;
         uint256 pubId;
     }
 
@@ -113,7 +113,6 @@ library NetworkLibrary {
         address creator;
         bool exist;
         uint256 timestampPurchased;
-        address referral;
         uint8 offer;
         ServiceResolutionStatus status;
     }

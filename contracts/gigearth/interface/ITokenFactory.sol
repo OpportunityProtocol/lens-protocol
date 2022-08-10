@@ -58,6 +58,5 @@ interface ITokenFactory {
     function getTokenIDPair(address token) external view returns (IDPair memory);
     function setTradingFee(uint marketID, uint tradingFeeRate) external;
     function setPlatformFee(uint marketID, uint platformFeeRate) external;
-    function setNameVerifier(uint marketID, address nameVerifier) external;
     function getMarketIDByTokenAddress(address tokenAddress) external view returns(uint);
 }

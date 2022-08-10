@@ -25,7 +25,6 @@ type PurchasedService @entity {
   id: ID!
   creator: Bytes!
   client: Bytes!
-  referral: Bytes!
   datePurchased: BigInt!
   purchaseId: BigInt!
   metadata: String!

@@ -61,7 +61,6 @@ export function handleServicePurchased(event: ServicePurchased): void {
     newPurchasedService.purchaseId = event.params.purchaseId;
     newPurchasedService.status = 0;
     newPurchasedService.offer = event.params.offer;
-    newPurchasedService.referral = event.params.referral;
     newPurchasedService.pubId = event.params.pubId;
     newPurchasedService.serviceId = event.params.serviceId;
     newPurchasedService.save();
