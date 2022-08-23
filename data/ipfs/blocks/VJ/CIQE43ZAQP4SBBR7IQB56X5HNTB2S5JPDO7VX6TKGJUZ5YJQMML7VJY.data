@@ -1,10 +1,10 @@
 
-ÉÁdataSources:
+§ŸdataSources:
   - kind: ethereum
     mapping:
       abis:
         - file:
-            /: /ipfs/QmPXLM6QPPKBGaTPbYxZLtmiWdzeLt6wTG15S6NK7HFjnX
+            /: /ipfs/QmSrD99mR9VMBDwYmv7i3pzgv1teYj65YTjTmxBSKyfW6J
           name: NetworkManager
       apiVersion: 0.0.5
       entities:
@@ -16,15 +16,17 @@
       eventHandlers:
         - event: >-
             UserRegistered(indexed address,indexed string,indexed
-            uint256,string)
+            uint256,string,string)
           handler: handleUserRegistered
+        - event: 'UpdateUserMetadata(address,uint256,string)'
+          handler: handleMetadataUpdated
         - event: >-
             ServiceCreated(indexed uint256,indexed uint256,indexed
             address,uint256[],string,uint256)
           handler: handleServiceCreated
         - event: >-
             ServicePurchased(indexed uint256,uint256,uint256,indexed
-            address,indexed address,address,uint256)
+            address,indexed address,uint256)
           handler: handleServicePurchased
         - event: >-
             ServiceResolved(indexed address,indexed address,indexed
@@ -39,7 +41,7 @@
             uint8,address,address,uint256)
           handler: handleContractOwnershipUpdate
       file:
-        /: /ipfs/QmQNq49tw1MPeH3fjdfxK6bbAQEx35BgbRiKDsTG1kGSnt
+        /: /ipfs/QmTu49PU7VPdMxLygoCzrr1KS15oNg7tAanqhmbeSNVk9z
       kind: ethereum/events
       language: wasm/assemblyscript
     name: NetworkManager
@@ -52,7 +54,7 @@
     mapping:
       abis:
         - file:
-            /: /ipfs/QmNamEFvUDozm9PPjmSnTdCCiFDxW8iYfVJXYb9D7ry7yr
+            /: /ipfs/QmQjfZvV1tHrKMvk86SSwtPP9CKPA7WF7cogQFN8nfxa1G
           name: TokenFactory
       apiVersion: 0.0.5
       entities:
@@ -62,10 +64,10 @@
         - event: 'NewToken(uint256,uint256,string,address,address)'
           handler: handleNewServiceToken
         - event: >-
-            NewMarket(uint256,string,uint256,uint256,uint256,uint256,uint256,bool,address)
+            NewMarket(uint256,string,uint256,uint256,uint256,uint256,uint256,bool)
           handler: handleNewMarket
       file:
-        /: /ipfs/QmRY2517bWMTSFXp6NoVccvzcvoR2XRyGyRLYpZmcjUYLq
+        /: /ipfs/QmSTTypa8YMJu6TVngsGePoRs12c8TkfqMyJCojqsy5xoq
       kind: ethereum/events
       language: wasm/assemblyscript
     name: TokenFactory
@@ -78,6 +80,6 @@ features:
   - ipfsOnEthereumContracts
 schema:
   file:
-    /: /ipfs/QmPrDfQieYZknP3gXnDHeRFM6qbXeB3NsfiKrQTv4KC1Pm
+    /: /ipfs/QmYjQjE4biWxAvwatCi1qhUzRXMhsvBLc5eA5hQJiyXt3M
 specVersion: 0.0.4
-Á
+Ÿ

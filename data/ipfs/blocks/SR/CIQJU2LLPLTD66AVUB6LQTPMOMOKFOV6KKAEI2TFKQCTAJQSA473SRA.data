@@ -1,5 +1,5 @@
 
-øğtype ExampleEntity @entity {
+	ˆ	type ExampleEntity @entity {
   id: ID!
   count: BigInt!
   fee: Int! # uint24
@@ -11,6 +11,7 @@ type VerifiedUser @entity {
   address: Bytes!
   handle: String!
   imageURI: String!
+  metadata: String!
 }
 
 type Service @entity {
@@ -26,7 +27,6 @@ type PurchasedService @entity {
   id: ID!
   creator: Bytes!
   client: Bytes!
-  referral: Bytes!
   datePurchased: BigInt!
   purchaseId: BigInt!
   metadata: String!
@@ -46,6 +46,7 @@ type Contract @entity {
   acceptanceTimestamp: String!
   resolutionTimestamp: String!
   amount: BigInt!
+  dateCreated: String!
 }
 
 type ServiceToken @entity {
@@ -69,4 +70,4 @@ type Market @entity {
 
 type TokenInfo @entity {
   id: ID!
-}ğ
+}ˆ	

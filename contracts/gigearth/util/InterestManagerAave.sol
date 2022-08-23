@@ -69,19 +69,23 @@ contract InterestManagerAave is Ownable, Initializable {
         uint balanceAfter = _cDai.balanceOf(address(this));
         return balanceAfter.sub(balanceBefore);*/
 
-        console.log('AAVE IS NOW INVESTING: ', amount);
+       
+        uint256 aDaiBalanceBefore = _aDai.balanceOf(address(this));
+        uint256 daiBalanceBefore = _dai.balanceOf(address(this));
 
-        uint balanceBefore = _aDai.balanceOf(address(this));
-        console.log("IAM aDai balance before supply ", balanceBefore);
-        console.log("IAM dai balance  before supply", _dai.balanceOf(address(this)));
+        console.log("IAM aDai balance before supply ", aDaiBalanceBefore);
+        console.log("IAM dai balance  before supply", daiBalanceBefore);
+
         require(_dai.balanceOf(address(this)) >= amount, "insufficient-dai");
         require(_dai.approve(address(_pool), amount), "dai-aavepool-approve");
         _pool.supply(address(_dai), amount, address(this), 0);
 
-        uint balanceAfter = _aDai.balanceOf(address(this));
-                 console.log("IAM aDai balance after supply ", balanceAfter);
-        console.log("IAM dai balance  after supply", _dai.balanceOf(address(this)));
-        return balanceAfter.sub(balanceBefore);
+        uint256 aDaiBalanceAfter = _aDai.balanceOf(address(this));
+        uint256 daiBalanceAfter = _dai.balanceOf(address(this));
+
+        console.log("IAM aDai balance after supply ", aDaiBalanceAfter);
+        console.log("IAM dai balance  after supply", daiBalanceAfter);
+        return aDaiBalanceAfter.sub(aDaiBalanceBefore);
     }
 
     /**

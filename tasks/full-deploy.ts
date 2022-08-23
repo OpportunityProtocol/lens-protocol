@@ -32,8 +32,9 @@ import {
   ServiceToken__factory,
   NetworkManager__factory,
   ServiceCollectModule__factory,
+  ServiceReferenceModule__factory,
 } from '../typechain-types';
-import { aavePolygonMumbaiDaiAddress, aavePolygonMumbaiPool, polygonMumbaiDaiAddress } from './constants';
+import { aavePolygonMumbaiDaiAddress, aavePolygonMumbaiPool, polygonMumbaiAaveDaiAddress, polygonMumbaiDaiAddress } from './constants';
 import { deployContract, ProtocolState, waitForTx, ZERO_ADDRESS } from './helpers/utils';
 
 const TREASURY_FEE_BPS = 50;
@@ -283,6 +284,17 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
       }
     )
   );
+
+  const serviceReferenceModule = await deployContract(
+    new ServiceReferenceModule__factory(deployer).deploy(
+      lensHub.address,
+      networkManager.address,
+      {
+        nonce: deployerNonce++
+      }
+    )
+  );
+
   // --- COMMENTED OUT AS THIS IS NOT A LAUNCH MODULE ---
   // console.log('\n\t-- Deploying approvalFollowModule --');
   // const approvalFollowModule = await deployContract(
@@ -360,7 +372,7 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   // Whitelist the reference module
   console.log('\n\t-- Whitelisting Reference Module --');
   await waitForTx(
-    lensHub.whitelistReferenceModule(followerOnlyReferenceModule.address, true, {
+    lensHub.whitelistReferenceModule(serviceReferenceModule.address, true, {
       nonce: governanceNonce++,
     })
   );
@@ -396,7 +408,7 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
 
   await interestManagerAave
     .connect(deployer)
-    .initialize(adminAddress, polygonMumbaiDaiAddress,  aavePolygonMumbaiDaiAddress, aavePolygonMumbaiPool);
+    .initialize(adminAddress, polygonMumbaiDaiAddress,  polygonMumbaiAaveDaiAddress, aavePolygonMumbaiPool);
 
   await tokenFactory
     .connect(deployer)
@@ -449,6 +461,7 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     'Network Manager': networkManager.address,
     'Token Logic': tokenLogic.address,
     'Service Collect Module': serviceCollectModule.address,
+    'Service Reference Module': serviceReferenceModule.address
   };
   const json = JSON.stringify(addrs, null, 2);
   console.log(addrs);

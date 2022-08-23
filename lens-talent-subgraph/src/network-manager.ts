@@ -5,21 +5,33 @@ import {
   ServicePurchased,
   ServiceResolved,
   ContractOwnershipUpdate,
-  ContractCreated
+  ContractCreated,
+  UpdateUserMetadata,
 } from '../generated/NetworkManager/NetworkManager';
 import { Market, Service, PurchasedService, Contract, VerifiedUser } from '../generated/schema';
 
 export function handleUserRegistered(event: UserRegistered): void {
-  const id = event.params.profileId.toString()
-  let verifiedUser = VerifiedUser.load(id)
+  const id = event.params.profileId.toString();
+  let verifiedUser = VerifiedUser.load(id);
 
   if (!verifiedUser) {
-    verifiedUser = new VerifiedUser(id)
+    verifiedUser = new VerifiedUser(id);
     verifiedUser.id = event.params.profileId.toString();
     verifiedUser.address = event.params.registeredAddress;
-    verifiedUser.handle = event.params.lensHandle.toString()
+    verifiedUser.handle = event.params.lensHandle.toString();
     verifiedUser.imageURI = event.params.imageURI;
-    verifiedUser.save()
+    verifiedUser.metadata = event.params.metadata;
+    verifiedUser.save();
+  }
+}
+
+export function handleMetadataUpdated(event: UpdateUserMetadata): void {
+  const id = event.params.lensProfileId.toString();
+  let verifiedUser = VerifiedUser.load(id);
+
+  if (verifiedUser) {
+    verifiedUser.metadata = event.params.metadataPtr;
+    verifiedUser.save();
   }
 }
 
@@ -53,7 +65,6 @@ export function handleServicePurchased(event: ServicePurchased): void {
       newPurchasedService.metadata = '';
     }
 
-
     newPurchasedService.id = id;
     newPurchasedService.creator = event.params.owner;
     newPurchasedService.client = event.params.purchaser;
@@ -68,12 +79,11 @@ export function handleServicePurchased(event: ServicePurchased): void {
 }
 
 export function handleServiceResolved(event: ServiceResolved): void {
-  const linkedService = Service.load(event.params.serviceId.toString())
-  const linkedServicePurchaseData = PurchasedService.load(event.params.purchaseId.toString())
+  const linkedServicePurchaseData = PurchasedService.load(event.params.purchaseId.toString());
 
   if (linkedServicePurchaseData) {
     linkedServicePurchaseData.status = 2;
-    linkedServicePurchaseData.save()
+    linkedServicePurchaseData.save();
   }
 }
 
@@ -84,7 +94,12 @@ export function handleContractOwnershipUpdate(event: ContractOwnershipUpdate): v
   if (contract) {
     contract.worker = event.params.worker;
     contract.ownership = event.params.ownership;
-    contract.resolutionTimestamp = event.block.timestamp.toString(); //convert to if case
+    if (event.params.ownership === 1) {
+      contract.acceptanceTimestamp = event.block.timestamp.toString();
+    }
+    if (event.params.ownership === 2) {
+      contract.resolutionTimestamp = event.block.timestamp.toString();
+    }
     contract.amount = event.params.amt;
     contract.save();
   }
@@ -98,10 +113,11 @@ export function handleContractCreated(event: ContractCreated): void {
     contract.id = id;
     contract.employer = event.params.creator;
     contract.marketId = event.params.marketId;
-    contract.metadata = event.params.metadataPtr.toString()
+    contract.metadata = event.params.metadataPtr.toString();
     contract.acceptanceTimestamp = '0';
-    contract.amount = new BigInt(0)
+    contract.amount = new BigInt(0);
     contract.worker = new Bytes(0);
+    contract.dateCreated = event.block.timestamp.toString();
     contract.resolutionTimestamp = '0';
     contract.ownership = 0;
     contract.save();

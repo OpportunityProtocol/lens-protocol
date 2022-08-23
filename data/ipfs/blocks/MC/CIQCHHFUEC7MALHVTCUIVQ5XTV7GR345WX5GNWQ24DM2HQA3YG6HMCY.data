@@ -1,5 +1,5 @@
 
-Õ~Í~[
+°t¨t[
   {
     "anonymous": false,
     "inputs": [
@@ -50,34 +50,9 @@
         "internalType": "bool",
         "name": "allInterestToPlatform",
         "type": "bool"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "nameVerifier",
-        "type": "address"
       }
     ],
     "name": "NewMarket",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "marketID",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "nameVerifier",
-        "type": "address"
-      }
-    ],
-    "name": "NewNameVerifier",
     "type": "event"
   },
   {
@@ -280,11 +255,6 @@
             "type": "string"
           },
           {
-            "internalType": "contract ITokenNameVerifier",
-            "name": "nameVerifier",
-            "type": "address"
-          },
-          {
             "internalType": "uint256",
             "name": "numTokens",
             "type": "uint256"
@@ -356,11 +326,6 @@
             "type": "string"
           },
           {
-            "internalType": "contract ITokenNameVerifier",
-            "name": "nameVerifier",
-            "type": "address"
-          },
-          {
             "internalType": "uint256",
             "name": "numTokens",
             "type": "uint256"
@@ -430,11 +395,6 @@
             "internalType": "string",
             "name": "name",
             "type": "string"
-          },
-          {
-            "internalType": "contract ITokenNameVerifier",
-            "name": "nameVerifier",
-            "type": "address"
           },
           {
             "internalType": "uint256",
@@ -705,24 +665,6 @@
   {
     "inputs": [
       {
-        "internalType": "uint256",
-        "name": "marketID",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "nameVerifier",
-        "type": "address"
-      }
-    ],
-    "name": "setNameVerifier",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "address",
         "name": "newOwner",
         "type": "address"
@@ -769,4 +711,4 @@
     "stateMutability": "nonpayable",
     "type": "function"
   }
-]Í~
+]¨t

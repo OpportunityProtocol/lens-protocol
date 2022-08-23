@@ -33,7 +33,8 @@
     "hardhat-local": "hardhat node --hostname 0.0.0.0 --fork https://polygon-mumbai.g.alchemy.com/v2/hE6e52UEwp8u_jj_SRZcf-n_YWanDE7d",
     "full-deploy-lens-talent-local": "hardhat lens-talent-testnet-full-deploy --network localhost",
     "set-balances-local": "hardhat set-balances --network localhost",
-    "lens-talent-deploy-markets-local": "hardhat lens-talent-configure-markets --network localhost"
+    "lens-talent-deploy-markets-local": "hardhat lens-talent-configure-markets --network localhost",
+    "lens-local-check-aave-balances": "hardhat lens-talent-check-a-token-balances --network localhost"
   },
   "repository": {
     "type": "git",

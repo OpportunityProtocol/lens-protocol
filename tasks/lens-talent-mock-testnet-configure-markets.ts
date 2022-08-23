@@ -71,23 +71,29 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
     );
 
 
-    await networkManager.connect(signers[6]).registerWorker({
+    await networkManager.connect(signers[6]).register({
       to: addresses['Network Manager'],
       handle: handles[6],
       imageURI: MOCK_PROFILE_URI,
       followModule: '0x0000000000000000000000000000000000000000',
       followModuleInitData: [],
       followNFTURI: MOCK_FOLLOW_NFT_URI,
-    });
+    },
 
-    await networkManager.connect(signers[1]).registerWorker({
+  'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu',
+
+    );
+
+    await networkManager.connect(signers[1]).register({
       to: addresses['Network Manager'],
       handle: handles[7],
       imageURI: MOCK_PROFILE_URI,
       followModule: '0x0000000000000000000000000000000000000000',
       followModuleInitData: [],
       followNFTURI: MOCK_FOLLOW_NFT_URI,
-    });
+    },
+    'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu',
+    );
 
     await networkManager
       .connect(signers[6])
@@ -95,8 +101,8 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
         1,
         'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu',
         [1000, 2000, 3000],
-        0,
-        addresses['Service Collect Module']
+        addresses['Service Collect Module'],
+        addresses['Service Reference Module']
       );
 
     await networkManager
@@ -105,8 +111,8 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
         1,
         'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu',
         [1000, 2000, 3000],
-        0,
-        addresses['Service Collect Module']
+        addresses['Service Collect Module'],
+        addresses['Service Reference Module']
       );
 
     //create contracts

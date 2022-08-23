@@ -10,6 +10,7 @@ type VerifiedUser @entity {
   address: Bytes!
   handle: String!
   imageURI: String!
+  metadata: String!
 }
 
 type Service @entity {
@@ -44,6 +45,7 @@ type Contract @entity {
   acceptanceTimestamp: String!
   resolutionTimestamp: String!
   amount: BigInt!
+  dateCreated: String!
 }
 
 type ServiceToken @entity {

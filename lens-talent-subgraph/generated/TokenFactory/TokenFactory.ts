@@ -54,32 +54,6 @@ export class NewMarket__Params {
   get allInterestToPlatform(): boolean {
     return this._event.parameters[7].value.toBoolean();
   }
-
-  get nameVerifier(): Address {
-    return this._event.parameters[8].value.toAddress();
-  }
-}
-
-export class NewNameVerifier extends ethereum.Event {
-  get params(): NewNameVerifier__Params {
-    return new NewNameVerifier__Params(this);
-  }
-}
-
-export class NewNameVerifier__Params {
-  _event: NewNameVerifier;
-
-  constructor(event: NewNameVerifier) {
-    this._event = event;
-  }
-
-  get marketID(): BigInt {
-    return this._event.parameters[0].value.toBigInt();
-  }
-
-  get nameVerifier(): Address {
-    return this._event.parameters[1].value.toAddress();
-  }
 }
 
 export class NewPlatformFee extends ethereum.Event {
@@ -195,36 +169,32 @@ export class TokenFactory__getMarketDetailsByIDResultValue0Struct extends ethere
     return this[2].toString();
   }
 
-  get nameVerifier(): Address {
-    return this[3].toAddress();
-  }
-
   get numTokens(): BigInt {
-    return this[4].toBigInt();
+    return this[3].toBigInt();
   }
 
   get baseCost(): BigInt {
-    return this[5].toBigInt();
+    return this[4].toBigInt();
   }
 
   get priceRise(): BigInt {
-    return this[6].toBigInt();
+    return this[5].toBigInt();
   }
 
   get hatchTokens(): BigInt {
-    return this[7].toBigInt();
+    return this[6].toBigInt();
   }
 
   get tradingFeeRate(): BigInt {
-    return this[8].toBigInt();
+    return this[7].toBigInt();
   }
 
   get platformFeeRate(): BigInt {
-    return this[9].toBigInt();
+    return this[8].toBigInt();
   }
 
   get allInterestToPlatform(): boolean {
-    return this[10].toBoolean();
+    return this[9].toBoolean();
   }
 }
 
@@ -241,36 +211,32 @@ export class TokenFactory__getMarketDetailsByNameResultValue0Struct extends ethe
     return this[2].toString();
   }
 
-  get nameVerifier(): Address {
-    return this[3].toAddress();
-  }
-
   get numTokens(): BigInt {
-    return this[4].toBigInt();
+    return this[3].toBigInt();
   }
 
   get baseCost(): BigInt {
-    return this[5].toBigInt();
+    return this[4].toBigInt();
   }
 
   get priceRise(): BigInt {
-    return this[6].toBigInt();
+    return this[5].toBigInt();
   }
 
   get hatchTokens(): BigInt {
-    return this[7].toBigInt();
+    return this[6].toBigInt();
   }
 
   get tradingFeeRate(): BigInt {
-    return this[8].toBigInt();
+    return this[7].toBigInt();
   }
 
   get platformFeeRate(): BigInt {
-    return this[9].toBigInt();
+    return this[8].toBigInt();
   }
 
   get allInterestToPlatform(): boolean {
-    return this[10].toBoolean();
+    return this[9].toBoolean();
   }
 }
 
@@ -287,36 +253,32 @@ export class TokenFactory__getMarketDetailsByTokenAddressResultValue0Struct exte
     return this[2].toString();
   }
 
-  get nameVerifier(): Address {
-    return this[3].toAddress();
-  }
-
   get numTokens(): BigInt {
-    return this[4].toBigInt();
+    return this[3].toBigInt();
   }
 
   get baseCost(): BigInt {
-    return this[5].toBigInt();
+    return this[4].toBigInt();
   }
 
   get priceRise(): BigInt {
-    return this[6].toBigInt();
+    return this[5].toBigInt();
   }
 
   get hatchTokens(): BigInt {
-    return this[7].toBigInt();
+    return this[6].toBigInt();
   }
 
   get tradingFeeRate(): BigInt {
-    return this[8].toBigInt();
+    return this[7].toBigInt();
   }
 
   get platformFeeRate(): BigInt {
-    return this[9].toBigInt();
+    return this[8].toBigInt();
   }
 
   get allInterestToPlatform(): boolean {
-    return this[10].toBoolean();
+    return this[9].toBoolean();
   }
 }
 
@@ -452,7 +414,7 @@ export class TokenFactory extends ethereum.SmartContract {
   ): TokenFactory__getMarketDetailsByIDResultValue0Struct {
     let result = super.call(
       "getMarketDetailsByID",
-      "getMarketDetailsByID(uint256):((bool,uint256,string,address,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
+      "getMarketDetailsByID(uint256):((bool,uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
       [ethereum.Value.fromUnsignedBigInt(marketID)]
     );
 
@@ -466,7 +428,7 @@ export class TokenFactory extends ethereum.SmartContract {
   ): ethereum.CallResult<TokenFactory__getMarketDetailsByIDResultValue0Struct> {
     let result = super.tryCall(
       "getMarketDetailsByID",
-      "getMarketDetailsByID(uint256):((bool,uint256,string,address,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
+      "getMarketDetailsByID(uint256):((bool,uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
       [ethereum.Value.fromUnsignedBigInt(marketID)]
     );
     if (result.reverted) {
@@ -485,7 +447,7 @@ export class TokenFactory extends ethereum.SmartContract {
   ): TokenFactory__getMarketDetailsByNameResultValue0Struct {
     let result = super.call(
       "getMarketDetailsByName",
-      "getMarketDetailsByName(string):((bool,uint256,string,address,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
+      "getMarketDetailsByName(string):((bool,uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
       [ethereum.Value.fromString(marketName)]
     );
 
@@ -501,7 +463,7 @@ export class TokenFactory extends ethereum.SmartContract {
   > {
     let result = super.tryCall(
       "getMarketDetailsByName",
-      "getMarketDetailsByName(string):((bool,uint256,string,address,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
+      "getMarketDetailsByName(string):((bool,uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
       [ethereum.Value.fromString(marketName)]
     );
     if (result.reverted) {
@@ -520,7 +482,7 @@ export class TokenFactory extends ethereum.SmartContract {
   ): TokenFactory__getMarketDetailsByTokenAddressResultValue0Struct {
     let result = super.call(
       "getMarketDetailsByTokenAddress",
-      "getMarketDetailsByTokenAddress(address):((bool,uint256,string,address,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
+      "getMarketDetailsByTokenAddress(address):((bool,uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
       [ethereum.Value.fromAddress(serviceToken)]
     );
 
@@ -536,7 +498,7 @@ export class TokenFactory extends ethereum.SmartContract {
   > {
     let result = super.tryCall(
       "getMarketDetailsByTokenAddress",
-      "getMarketDetailsByTokenAddress(address):((bool,uint256,string,address,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
+      "getMarketDetailsByTokenAddress(address):((bool,uint256,string,uint256,uint256,uint256,uint256,uint256,uint256,bool))",
       [ethereum.Value.fromAddress(serviceToken)]
     );
     if (result.reverted) {
@@ -909,40 +871,6 @@ export class InitializeCall__Outputs {
   _call: InitializeCall;
 
   constructor(call: InitializeCall) {
-    this._call = call;
-  }
-}
-
-export class SetNameVerifierCall extends ethereum.Call {
-  get inputs(): SetNameVerifierCall__Inputs {
-    return new SetNameVerifierCall__Inputs(this);
-  }
-
-  get outputs(): SetNameVerifierCall__Outputs {
-    return new SetNameVerifierCall__Outputs(this);
-  }
-}
-
-export class SetNameVerifierCall__Inputs {
-  _call: SetNameVerifierCall;
-
-  constructor(call: SetNameVerifierCall) {
-    this._call = call;
-  }
-
-  get marketID(): BigInt {
-    return this._call.inputValues[0].value.toBigInt();
-  }
-
-  get nameVerifier(): Address {
-    return this._call.inputValues[1].value.toAddress();
-  }
-}
-
-export class SetNameVerifierCall__Outputs {
-  _call: SetNameVerifierCall;
-
-  constructor(call: SetNameVerifierCall) {
     this._call = call;
   }
 }

@@ -127,6 +127,15 @@ export class VerifiedUser extends Entity {
   set imageURI(value: string) {
     this.set("imageURI", Value.fromString(value));
   }
+
+  get metadata(): string {
+    let value = this.get("metadata");
+    return value!.toString();
+  }
+
+  set metadata(value: string) {
+    this.set("metadata", Value.fromString(value));
+  }
 }
 
 export class Service extends Entity {
@@ -263,15 +272,6 @@ export class PurchasedService extends Entity {
 
   set client(value: Bytes) {
     this.set("client", Value.fromBytes(value));
-  }
-
-  get referral(): Bytes {
-    let value = this.get("referral");
-    return value!.toBytes();
-  }
-
-  set referral(value: Bytes) {
-    this.set("referral", Value.fromBytes(value));
   }
 
   get datePurchased(): BigInt {
@@ -439,6 +439,15 @@ export class Contract extends Entity {
 
   set amount(value: BigInt) {
     this.set("amount", Value.fromBigInt(value));
+  }
+
+  get dateCreated(): string {
+    let value = this.get("dateCreated");
+    return value!.toString();
+  }
+
+  set dateCreated(value: string) {
+    this.set("dateCreated", Value.fromString(value));
   }
 }
 

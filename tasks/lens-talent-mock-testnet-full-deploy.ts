@@ -17,7 +17,7 @@ import { Contract } from '@ethersproject/contracts';
 
 import fs from 'fs';
 import {
-  aaveMumbaiAToken,
+  polygonMumbaiAaveDaiAddress,
   aavePolygonMumbaiPool,
   lensHubMumbaiGovernance,
   lensHubMumbaiProfileCreationProxyAddress,
@@ -91,13 +91,24 @@ task(
     )
   );
 
+  const serviceReferenceModule = await deployContract(
+    new ServiceCollectModule__factory(deployer).deploy(
+      lensHubPolygonMumbaiAddress,
+      lensMumbaiModuleGlobalPolygonMumbaiAddress,
+      networkManager.address,
+      {
+        nonce: deployerNonce++
+      }
+    )
+  )
+
   //INITIALIZE CONTRACTS
   await interestManagerAave
     .connect(deployer)
     .initialize(
       networkManager.address,
       polygonMumbaiDaiAddress,
-      aaveMumbaiAToken,
+      polygonMumbaiAaveDaiAddress,
       aavePolygonMumbaiPool
     );
 
@@ -168,6 +179,7 @@ task(
     TokenLogic: tokenLogic.address,
     NetworkManager: networkManager.address,
     ServiceCollectModule: serviceCollectModule.address,
+    ServiceReferenceModule: serviceReferenceModule.address
   };
 
   const json = JSON.stringify(mockTestnetAddresses, null, 2);

@@ -17,7 +17,7 @@ import { Contract } from '@ethersproject/contracts';
 
 import fs from 'fs';
 import {
-  aaveMumbaiAToken,
+  polygonMumbaiAaveDaiAddress,
   aavePolygonMumbaiPool,
   lensHubMumbaiGovernance,
   lensHubMumbaiProfileCreationProxyAddress,
@@ -97,7 +97,7 @@ task(
     .initialize(
       networkManager.address,
       polygonMumbaiDaiAddress,
-      aaveMumbaiAToken,
+      polygonMumbaiAaveDaiAddress,
       aavePolygonMumbaiPool
     );
 
