@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.7;
 
-import "../util/ERC20.sol";
-import "../util/Ownable.sol";
-import "../util/Initializable.sol";
-import "../interface/IServiceToken.sol";
+import '../util/ERC20.sol';
+import '../util/Ownable.sol';
+import '../util/Initializable.sol';
+import '../interface/IServiceToken.sol';
 
 /**
- * @title IdeaToken
- * @author Alexander Schlindwein
+ * @title ServiceToken
  *
  * IdeaTokens are implementations of the ERC20 interface
- * They can be burned and minted by the owner of the contract instance which is the IdeaTokenExchange
+ * They can be burned and minted by the owner of the contract instance which is the TokenExchange
  *
  * New instances are created using a MinimalProxy
  */
 contract ServiceToken is IServiceToken, ERC20, Ownable, Initializable {
-
     /**
      * Constructs an IdeaToken with 18 decimals
      * The constructor is called by the IdeaTokenFactory when a new token is listed
@@ -28,7 +26,7 @@ contract ServiceToken is IServiceToken, ERC20, Ownable, Initializable {
     function initialize(string calldata __name, address owner) external override initializer {
         setOwnerInternal(owner);
         _decimals = 18;
-        _symbol = "IDT";
+        _symbol = 'IDT';
         _name = __name;
     }
 

@@ -4,7 +4,7 @@
     mapping:
       abis:
         - file:
-            /: /ipfs/QmSrD99mR9VMBDwYmv7i3pzgv1teYj65YTjTmxBSKyfW6J
+            /: /ipfs/QmZpJyuTiFvYT6aq8SonFTMsZX3Sqom6uoaUnFwxSyRTbQ
           name: NetworkManager
       apiVersion: 0.0.5
       entities:

@@ -5,6 +5,7 @@ import '../util/Initializable.sol';
 import '../interface/IArbitrable.sol';
 import '../interface/IEvidence.sol';
 import '../interface/ITokenFactory.sol';
+import '../interface/INetworkManager.sol';
 import '../../interfaces/ILensHub.sol';
 import '../../libraries/DataTypes.sol';
 import '../libraries/NetworkLibrary.sol';
@@ -17,22 +18,7 @@ interface IProfileCreator {
     function proxyCreateProfile(DataTypes.CreateProfileData memory vars) external;
 }
 
-interface IServiceCollectModule {
-    function releaseCollectedFunds(
-        uint256 profileId,
-        uint256 pubId,
-        uint8 offerIndex
-    ) external;
-
-    function emergencyReleaseDisputedFunds(
-        uint256 profileId,
-        uint256 pubId,
-        address recipient,
-        uint8 offerIndex
-    ) external;
-}
-
-contract NetworkManager is Initializable, IArbitrable, IEvidence {
+contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidence {
     /**
      * Emitted when an address is registered with lenshub and lenstalent.
      *
@@ -146,26 +132,24 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     IArbitrator public arbitrator;
     ILensHub public lensHub;
     IProfileCreator public proxyProfileCreator;
+    ITokenFactory public _tokenFactory;
+    IERC20 public _dai;
 
     uint16 internal constant BPS_MAX = 10000;
+    uint256 _claimedServiceCounter;
     uint256 constant numberOfRulingOptions = 2;
     uint256 public constant arbitrationFeeDepositPeriod = 1;
+    uint256 _protocolFee = 10;
 
     address public governance;
     address public treasury;
     address public LENS_FOLLOW_MODULE;
     address public LENS_CONTENT_REFERENCE_MODULE;
-    ITokenFactory public _tokenFactory;
-    IERC20 public _dai;
-
-    uint256 _claimedServiceCounter;
     address[] public verifiedFreelancers;
+
     NetworkLibrary.Relationship[] public relationships;
     NetworkLibrary.Service[] public services;
 
-    uint256 _protocolFee = 10;
-
-    //TODO: Refactor services and relationships to use the same ID array
     mapping(address => uint256) public addressToLensProfileId;
     mapping(uint256 => uint256) public disputeIDtoRelationshipID;
     mapping(uint256 => NetworkLibrary.RelationshipEscrowDetails)
@@ -191,10 +175,6 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         _;
     }
 
-    modifier onlyOwnerOrDispatcherOfLensProfileId() {
-        _;
-    }
-
     modifier onlyContractEmployer(uint256 contractId) {
         NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
         require(msg.sender == relationship.employer, 'only contract employer');
@@ -202,13 +182,19 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     }
 
     modifier onlyContractWorker() {
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
+        require(msg.sender == relationship.worker, 'only contract worker');
         _;
     }
 
     modifier onlyGovernance() {
+        require(msg.sender == governance, 'only governance');
         _;
     }
 
+    /**
+     * Initializes the
+     */
     function initialize(
         address tokenFactory,
         address _treasury,
@@ -258,7 +244,6 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         // /************ END MAINNET AND LOCAL ONLY ***************/
 
         uint256 profileId = lensHub.getProfileIdByHandle(registeredHandle);
-        lensHub.setDispatcher(profileId, msg.sender);
 
         addressToLensProfileId[msg.sender] = profileId;
         verifiedFreelancers.push(msg.sender);
@@ -266,6 +251,10 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         emit UserRegistered(msg.sender, vars.handle, profileId, vars.imageURI, metadata);
     }
 
+    /**
+     * Allows any entity to update its own metadata pointer
+     * @param metadataPtr The pointer to the entities metadata
+     */
     function updateMetadata(string calldata metadataPtr) public {
         emit UpdateUserMetadata(msg.sender, addressToLensProfileId[msg.sender], metadataPtr);
     }
@@ -335,6 +324,10 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         return serviceId;
     }
 
+    /**
+     * Stores a service and emits a service created event
+     * @dev Created to prevent stack too deep error
+     */
     function storeService(NetworkLibrary.Service memory newService) internal {
         services.push(newService);
         serviceIdToService[newService.id] = newService;
@@ -443,16 +436,6 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         workRelationshipToStatus[msg.sender][serviceId] = true;
 
         emit ServiceResolved(service.creator, msg.sender, purchaseId, serviceId, metadata.offer);
-    }
-
-    /**
-     * Provides a status that two parties have worked together in the past.
-     * @notice Only for services
-     * @param employer The purchaser of the service
-     * @param serviceId The service id of the purchased and fulfilled service
-     */
-    function isFamiliar(address employer, uint256 serviceId) external returns (bool) {
-        return workRelationshipToStatus[employer][serviceId];
     }
 
     /**
@@ -790,7 +773,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
                 : (escrowDetails.reclaimedAt + arbitrationFeeDepositPeriod - block.timestamp);
     }
 
-    /// Escrow Related Functions ///
+    ///////////////////////////////////////////// Escrow
 
     /**
      * @notice Initializes the funds into the escrow and records the details of the escrow into a struct.
@@ -844,25 +827,8 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     ///////////////////////////////////////////// Setters
 
     /**
-     * Sets the appropriate lens protocol follow module
-     * @param _LENS_FOLLOW_MODULE The address of the lens follow module
-     */
-    function setLensFollowModule(address _LENS_FOLLOW_MODULE) external onlyGovernance {
-        LENS_FOLLOW_MODULE = _LENS_FOLLOW_MODULE;
-    }
-
-    /**
-     * Sets the appropriate lens protocol reference module
-     * @param _LENS_CONTENT_REFERENCE_MODULE The address of the lens follow module
-     */
-    function setLensContentReferenceModule(address _LENS_CONTENT_REFERENCE_MODULE)
-        external
-        onlyGovernance
-    {
-        LENS_CONTENT_REFERENCE_MODULE = _LENS_CONTENT_REFERENCE_MODULE;
-    }
-
-    /**
+     * Sets the protocol fee
+     * @param protocolFee The fee for the protocol
      */
     function setProtocolFee(uint256 protocolFee) external onlyGovernance {
         _protocolFee = protocolFee;
@@ -871,13 +837,17 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     ///////////////////////////////////////////// Getters
 
     /**
-     * Returns the list of registered services
-     * @return All registered services
+     * Returns the list of services
+     * @return services an array of all services
      */
     function getServices() public view returns (NetworkLibrary.Service[] memory) {
         return services;
     }
 
+    /**
+     * Returns the list of contracts
+     * @return contracts an array of all contracts
+     */
     function getContracts() public view returns (NetworkLibrary.Relationship[] memory) {
         return relationships;
     }
@@ -904,26 +874,35 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         return relationshipIDToRelationship[contractId];
     }
 
+    /**
+     * Returns the protocol fee
+     * @return uint256 The protocol fee
+     */
     function getProtocolFee() external view returns (uint256) {
         return _protocolFee;
     }
 
+    /**
+     * Returns the lens protocol profile id for any address
+     * @param account The address to query
+     * @return uint256 The profile id
+     */
     function getLensProfileIdFromAddress(address account) public view returns (uint256) {
         return addressToLensProfileId[account];
     }
 
-    function getPubIdFromServiceId(uint256 serviceId) public view returns (uint256) {
-        return serviceIdToPublicationId[serviceId];
-    }
-
-    function getPurchaseIdFromServiceId(uint256 serviceId) public view returns (uint256) {
-        return serviceIdToPurchaseId[serviceId];
-    }
-
+    /**
+     * Returns the complete list of verified users
+     * @return address An array of all verified users
+     */
     function getVerifiedFreelancers() public view returns (address[] memory) {
         return verifiedFreelancers;
     }
 
+    /**
+     * Returns the purchase metadata for a service
+     * @param purchaseId The ID of the purchase
+     */
     function getServicePurchaseMetadata(uint256 purchaseId)
         public
         view

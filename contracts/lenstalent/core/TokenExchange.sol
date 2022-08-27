@@ -20,8 +20,7 @@ interface INetworkManager {
 }
 
 /**
- * @title TokenExchange (Originally: IdeaTokenExchange)
- * @author Alexander Schlindwein
+ * @title TokenExchange
  *
  * Exchanges Dai <-> ServiceTokens using a bonding curve. Sits behind a proxy
  */
@@ -338,7 +337,9 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
     ) external virtual override {
         //uint256 marketID = _tokenFactory.getMarketIDByTokenAddress(serviceToken);
         IDPair memory tokenIDPair = _tokenFactory.getTokenIDPair(serviceToken);
-        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID((tokenIDPair.marketID));
+        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID(
+            (tokenIDPair.marketID)
+        );
 
         require(marketDetails.exists, 'token-not-exist');
         require(

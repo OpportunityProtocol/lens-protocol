@@ -630,6 +630,19 @@
     "inputs": [
       {
         "internalType": "uint256",
+        "name": "serviceId",
+        "type": "uint256"
+      }
+    ],
+    "name": "disputeService",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
         "name": "contractId",
         "type": "uint256"
       }
@@ -1114,6 +1127,30 @@
     "inputs": [
       {
         "internalType": "address",
+        "name": "employer",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "serviceId",
+        "type": "uint256"
+      }
+    ],
+    "name": "isFamiliarWithService",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
         "name": "account",
         "type": "address"
       }
@@ -1166,33 +1203,6 @@
         "internalType": "uint8",
         "name": "offerIndex",
         "type": "uint8"
-      },
-      {
-        "components": [
-          {
-            "internalType": "uint8",
-            "name": "v",
-            "type": "uint8"
-          },
-          {
-            "internalType": "bytes32",
-            "name": "r",
-            "type": "bytes32"
-          },
-          {
-            "internalType": "bytes32",
-            "name": "s",
-            "type": "bytes32"
-          },
-          {
-            "internalType": "uint256",
-            "name": "deadline",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct DataTypes.EIP712Signature",
-        "name": "sig",
-        "type": "tuple"
       }
     ],
     "name": "purchaseServiceOffering",
@@ -1537,6 +1547,33 @@
         "internalType": "uint256",
         "name": "purchaseId",
         "type": "uint256"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint8",
+            "name": "v",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "r",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "s",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint256",
+            "name": "deadline",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct DataTypes.EIP712Signature",
+        "name": "sig",
+        "type": "tuple"
       }
     ],
     "name": "resolveService",
