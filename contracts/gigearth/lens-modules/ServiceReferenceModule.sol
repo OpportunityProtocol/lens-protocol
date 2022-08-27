@@ -7,9 +7,7 @@ import {ModuleBase} from '../../core/modules/ModuleBase.sol';
 import {IERC721} from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 
 interface INetworkManager {
-    function getProtocolFee() external view returns (uint256);
-
-    function isFamiliar(address employer, uint256 serviceId) external returns (bool);
+    function isFamiliarWithService(address employer, uint256 serviceId) external returns (bool);
 }
 
 struct ReferenceData {
@@ -34,7 +32,7 @@ contract ServiceReferenceModule is IReferenceModule, ModuleBase {
     }
 
     /**
-     * @dev There is nothing needed at initialization.
+     * Initializes the reference module.
      */
     function initializeReferenceModule(
         uint256 profileId,
@@ -51,6 +49,10 @@ contract ServiceReferenceModule is IReferenceModule, ModuleBase {
         return new bytes(0);
     }
 
+    /**
+     * Processes a new comment.
+     * @dev Checks to see if the commenter has collected (purchased) the service.
+     */
     function processComment(
         uint256 profileId,
         uint256 profileIdPointed,
@@ -63,7 +65,7 @@ contract ServiceReferenceModule is IReferenceModule, ModuleBase {
 
         //verify relationship validity
         assert(
-            _lensTalentNetworkManager.isFamiliar(
+            _lensTalentNetworkManager.isFamiliarWithService(
                 commentCreator,
                 _dataByPublicationByProfile[profileIdPointed][pubIdPointed].serviceID
             )

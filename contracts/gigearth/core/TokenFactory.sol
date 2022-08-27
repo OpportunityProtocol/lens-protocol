@@ -11,6 +11,7 @@ import "../interface/IServiceToken.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "hardhat/console.sol";
 import "../interface/INetworkManager.sol";
+
 /**
  * @title TokenFactory (Original: IdeaTokenFactory)
  * @author Elijah Hampton (Original: Alexander Schlindwein)

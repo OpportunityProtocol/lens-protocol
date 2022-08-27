@@ -147,6 +147,7 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     ILensHub public lensHub;
     IProfileCreator public proxyProfileCreator;
 
+    uint16 internal constant BPS_MAX = 10000;
     uint256 constant numberOfRulingOptions = 2;
     uint256 public constant arbitrationFeeDepositPeriod = 1;
 
@@ -293,9 +294,12 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         address lensTalentServiceCollectModule,
         address lensTalentReferenceModule
     ) public returns (uint256) {
-        require(lensTalentServiceCollectModule != address(0), "invalid address for service collect module");
-        require(lensTalentReferenceModule != address(0), "invalid address for reference module.");
-        
+        require(
+            lensTalentServiceCollectModule != address(0),
+            'invalid address for service collect module'
+        );
+        require(lensTalentReferenceModule != address(0), 'invalid address for reference module.');
+
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID(marketId);
         uint256 serviceId = _tokenFactory.addToken(
             marketDetails.name,
@@ -350,11 +354,11 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      * Purchases a service offering
      * @param serviceId The id of the service to purchase
      */
-    function purchaseServiceOffering(
-        uint256 serviceId,
-        uint8 offerIndex,
-        DataTypes.EIP712Signature calldata sig
-    ) public notServiceOwner returns (uint256) {
+    function purchaseServiceOffering(uint256 serviceId, uint8 offerIndex)
+        public
+        notServiceOwner
+        returns (uint256)
+    {
         NetworkLibrary.Service memory service = serviceIdToService[serviceId];
 
         _claimedServiceCounter++;
@@ -370,17 +374,9 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
             });
 
         serviceIdToPurchaseId[serviceId] = _claimedServiceCounter;
-        bytes memory processCollectData = abi.encode(address(_dai), service.offers[0], offerIndex);
 
-        DataTypes.CollectWithSigData memory collectWithSigData = DataTypes.CollectWithSigData({
-            collector: msg.sender,
-            profileId: addressToLensProfileId[service.creator],
-            pubId: serviceIdToPublicationId[serviceId],
-            data: processCollectData,
-            sig: sig
-        });
-
-        lensHub.collectWithSig(collectWithSigData);
+        _dai.approve(address(this), service.offers[offerIndex]);
+        _dai.transfer(address(this), service.offers[offerIndex]);
 
         emit ServicePurchased(
             serviceId,
@@ -398,7 +394,11 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      * @param serviceId The id of the service to resolve
      * @param purchaseId The purchase id of the service
      */
-    function resolveService(uint256 serviceId, uint256 purchaseId) public onlyServiceClient {
+    function resolveService(
+        uint256 serviceId,
+        uint256 purchaseId,
+        DataTypes.EIP712Signature calldata sig
+    ) public onlyServiceClient {
         NetworkLibrary.PurchasedServiceMetadata memory metadata = purchasedServiceIdToMetdata[
             purchaseId
         ];
@@ -411,11 +411,33 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
         require(metadata.client == msg.sender, 'only client');
         require(metadata.exist == true, "service doesn't exist");
 
-        IServiceCollectModule(service.collectModule).releaseCollectedFunds(
-            addressToLensProfileId[service.creator],
-            serviceIdToPublicationId[service.id],
-            metadata.offer
+        uint256 amount = service.offers[metadata.offer];
+        uint256 treasuryAmount = (amount * _protocolFee) / BPS_MAX;
+        uint256 adjustedAmount = amount - treasuryAmount;
+
+        IERC20(_dai).transfer(service.creator, adjustedAmount);
+
+        if (treasuryAmount > 0) {
+            IERC20(_dai).transfer(address(this), treasuryAmount);
+        }
+
+        bytes memory processCollectData = abi.encode(
+            msg.sender,
+            addressToLensProfileId[msg.sender],
+            serviceId,
+            abi.encode(address(_dai), adjustedAmount)
         );
+
+        DataTypes.CollectWithSigData memory collectWithSigData = DataTypes.CollectWithSigData({
+            collector: msg.sender,
+            profileId: addressToLensProfileId[service.creator],
+            pubId: serviceIdToPublicationId[serviceId],
+            data: processCollectData,
+            sig: sig
+        });
+
+        lensHub.collectWithSig(collectWithSigData);
+
         metadata.status = NetworkLibrary.ServiceResolutionStatus.RESOLVED;
 
         workRelationshipToStatus[msg.sender][serviceId] = true;
@@ -430,6 +452,16 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
      * @param serviceId The service id of the purchased and fulfilled service
      */
     function isFamiliar(address employer, uint256 serviceId) external returns (bool) {
+        return workRelationshipToStatus[employer][serviceId];
+    }
+
+    /**
+     * Provides a status that two parties have worked together in the past.
+     * @notice Only for services
+     * @param employer The purchaser of the service
+     * @param serviceId The service id of the purchased and fulfilled service
+     */
+    function isFamiliarWithService(address employer, uint256 serviceId) external returns (bool) {
         return workRelationshipToStatus[employer][serviceId];
     }
 
@@ -587,6 +619,13 @@ contract NetworkManager is Initializable, IArbitrable, IEvidence {
     }
 
     ///////////////////////////////////////////// Kleros
+
+    /**
+     * @notice A call to this function initiates the arbitration pay period for the employer of the relationship.
+     * @dev The client must call this function a second time to claim the funds from this contract if employer does not with to enter arbitration.
+     * @param serviceId The id of the relationship to begin a disputed state
+     */
+    function disputeService(uint256 serviceId) external payable {}
 
     /**
      * @notice A call to this function initiates the arbitration pay period for the worker of the relationship.
