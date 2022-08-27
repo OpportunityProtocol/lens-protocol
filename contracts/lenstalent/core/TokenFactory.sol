@@ -170,7 +170,6 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
     ) external virtual override onlyNetworkManager returns (uint256) {
         MarketInfo storage marketInfo = _markets[marketID];
         require(_marketDetails[marketID].exists, 'market-not-exist');
-        // require(isValidTokenName(tokenName, marketID), "invalid-name");
 
         IServiceToken serviceToken = IServiceToken(address(new MinimalProxy(_tokenLogic)));
 
@@ -200,31 +199,6 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
 
         emit NewToken(tokenID, marketID, tokenName, address(serviceToken), lister);
         return tokenID;
-    }
-
-    /**
-     * Checks whether a token name is allowed and not used already
-     *
-     * @param tokenName The intended token name
-     * @param marketID The market on which the token is to be listed
-     *
-     * @return True if the name is allowed, false otherwise
-     */
-    function isValidTokenName(string calldata tokenName, uint256 marketID)
-        public
-        view
-        virtual
-        override
-        returns (bool)
-    {
-        MarketInfo storage marketInfo = _markets[marketID];
-        MarketDetails storage marketDetails = _marketDetails[marketID];
-
-        if (marketInfo.tokenNameUsed[tokenName]) {
-            return false;
-        }
-
-        return true;
     }
 
     /**
