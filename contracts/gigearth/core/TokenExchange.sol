@@ -15,6 +15,10 @@ import '@openzeppelin/contracts/utils/math/SafeMath.sol';
 
 import 'hardhat/console.sol';
 
+interface INetworkManager {
+    function isFamiliarWithService(address employer, uint256 serviceId) external returns (bool);
+}
+
 /**
  * @title TokenExchange (Originally: IdeaTokenExchange)
  * @author Alexander Schlindwein
@@ -70,6 +74,8 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
     IInterestManager _interestManager;
     // Dai contract
     IERC20 _dai;
+    //Network Manager
+    INetworkManager _networkManager;
 
     // ServiceToken address => bool. Whether or not to disable all fee collection for a specific ServiceToken.
     mapping(address => bool) _tokenFeeKillswitch;
@@ -109,11 +115,13 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         address dai
     ) external virtual initializer {
         require(
-            authorizer != address(0) 
-            && tradingFeeRecipient != address(0) 
-            && interestManager != address(0) 
-            && dai != address(0)
-            && tokenFactory != address(0), 'invalid-params');
+            authorizer != address(0) &&
+                tradingFeeRecipient != address(0) &&
+                interestManager != address(0) &&
+                dai != address(0) &&
+                tokenFactory != address(0),
+            'invalid-params'
+        );
 
         setOwnerInternal(owner); // Checks owner to be non-zero
         _authorizer = authorizer;
@@ -328,10 +336,15 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         uint256 cost,
         address recipient
     ) external virtual override {
-        uint256 marketID = _tokenFactory.getMarketIDByTokenAddress(serviceToken);
-        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID((marketID));
+        //uint256 marketID = _tokenFactory.getMarketIDByTokenAddress(serviceToken);
+        IDPair memory tokenIDPair = _tokenFactory.getTokenIDPair(serviceToken);
+        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID((tokenIDPair.marketID));
 
         require(marketDetails.exists, 'token-not-exist');
+        require(
+            _networkManager.isFamiliarWithService(msg.sender, tokenIDPair.tokenID),
+            'you must have purchased this service'
+        );
 
         uint256 supply = IERC20(serviceToken).totalSupply();
         bool feesDisabled = _tokenFeeKillswitch[serviceToken];
@@ -364,7 +377,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
 
         ExchangeInfo storage exchangeInfo;
         if (marketDetails.allInterestToPlatform) {
-            exchangeInfo = _platformsExchangeInfo[marketID];
+            exchangeInfo = _platformsExchangeInfo[tokenIDPair.marketID];
         } else {
             exchangeInfo = _tokensExchangeInfo[serviceToken];
         }
@@ -378,15 +391,15 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         );
         _tradingFeeInvested = tradingFeeInvested;
 
-        uint256 platformFeeInvested = _platformFeeInvested[marketID].add(
+        uint256 platformFeeInvested = _platformFeeInvested[tokenIDPair.marketID].add(
             _interestManager.underlyingToInvestmentToken(amounts.platformFee)
         );
 
-        _platformFeeInvested[marketID] = platformFeeInvested;
+        _platformFeeInvested[tokenIDPair.marketID] = platformFeeInvested;
         exchangeInfo.dai = exchangeInfo.dai.add(amounts.raw);
 
         emit InvestedState(
-            marketID,
+            tokenIDPair.marketID,
             serviceToken,
             exchangeInfo.dai,
             exchangeInfo.invested,
@@ -683,7 +696,6 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         if (invested == 0) {
             return;
         }
-
 
         _tradingFeeInvested = 0;
         uint256 redeem = _interestManager.investmentTokenToUnderlying(invested);
