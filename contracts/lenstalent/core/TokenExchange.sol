@@ -42,7 +42,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
 
     // The address authorized to set token and platform owners.
     // It is only allowed to change these when the current owner is not set (zero address).
-    // Using such an address allows an external program to make authorization calls without having to go through the timelock.
+    // Using such an address allows an external program to make authorization calls
     address _authorizer;
 
     // The amount of "investment tokens" for the collected trading fee, e.g. cDai

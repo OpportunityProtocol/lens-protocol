@@ -1,28 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.7;
 
-import "./Ownable.sol";
-import "./Initializable.sol";
-import "../interface/ICToken.sol";
-import "../interface/IComptroller.sol";
-import "../interface/IInterestManager.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import {IPool} from "@aave/core-v3/contracts/interfaces/IPool.sol";
-import {IAToken} from "@aave/core-v3/contracts/interfaces/IAToken.sol";
-import "hardhat/console.sol";
-
+import './Ownable.sol';
+import './Initializable.sol';
+import '../interface/IInterestManager.sol';
+import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import '@openzeppelin/contracts/utils/math/SafeMath.sol';
+import {IPool} from '@aave/core-v3/contracts/interfaces/IPool.sol';
+import {IAToken} from '@aave/core-v3/contracts/interfaces/IAToken.sol';
+import 'hardhat/console.sol';
 
 /**
  * @title InterestManagerAave
  * @author Alexander Schlindwein
- * 
+ *
  * Invests DAI into Compound to generate interest
- * Sits behind an AdminUpgradabilityProxy 
+ * Sits behind an AdminUpgradabilityProxy
  */
 contract InterestManagerAave is Ownable, Initializable {
-
-    using SafeMath for uint;
+    using SafeMath for uint256;
 
     // Dai contract
     IERC20 internal _dai;
@@ -30,8 +26,6 @@ contract InterestManagerAave is Ownable, Initializable {
     IAToken internal _aDai;
     //Llending pool contract
     IPool internal _pool;
-
-
 
     /**
      * Initializes the contract with all required values
@@ -41,11 +35,13 @@ contract InterestManagerAave is Ownable, Initializable {
      * @param aDai The aDai token address
      * @param pool The aave lending pool token address
      */
-    function initialize(address owner, address dai, address aDai, address pool) external virtual initializer {
-        require(dai != address(0) &&
-                aDai != address(0) &&
-                pool != address(0),
-                "invalid-params");
+    function initialize(
+        address owner,
+        address dai,
+        address aDai,
+        address pool
+    ) external virtual initializer {
+        require(dai != address(0) && aDai != address(0) && pool != address(0), 'invalid-params');
 
         setOwnerInternal(owner); // Checks owner to be non-zero
         _dai = IERC20(dai);
@@ -61,30 +57,17 @@ contract InterestManagerAave is Ownable, Initializable {
      *
      * @return The amount of minted cDai
      */
-    function invest(uint amount) external virtual onlyOwner returns (uint) {
-       /* uint balanceBefore = _cDai.balanceOf(address(this));
-        require(_dai.balanceOf(address(this)) >= amount, "insufficient-dai");
-        require(_dai.approve(address(_cDai), amount), "dai-cdai-approve");
-        require(_cDai.mint(amount) == 0, "cdai-mint");
-        uint balanceAfter = _cDai.balanceOf(address(this));
-        return balanceAfter.sub(balanceBefore);*/
-
-       
+    function invest(uint256 amount) external virtual onlyOwner returns (uint256) {
         uint256 aDaiBalanceBefore = _aDai.balanceOf(address(this));
         uint256 daiBalanceBefore = _dai.balanceOf(address(this));
 
-        console.log("IAM aDai balance before supply ", aDaiBalanceBefore);
-        console.log("IAM dai balance  before supply", daiBalanceBefore);
-
-        require(_dai.balanceOf(address(this)) >= amount, "insufficient-dai");
-        require(_dai.approve(address(_pool), amount), "dai-aavepool-approve");
+        require(_dai.balanceOf(address(this)) >= amount, 'insufficient-dai');
+        require(_dai.approve(address(_pool), amount), 'dai-aavepool-approve');
         _pool.supply(address(_dai), amount, address(this), 0);
 
         uint256 aDaiBalanceAfter = _aDai.balanceOf(address(this));
         uint256 daiBalanceAfter = _dai.balanceOf(address(this));
 
-        console.log("IAM aDai balance after supply ", aDaiBalanceAfter);
-        console.log("IAM dai balance  after supply", daiBalanceAfter);
         return aDaiBalanceAfter.sub(aDaiBalanceBefore);
     }
 
@@ -96,21 +79,18 @@ contract InterestManagerAave is Ownable, Initializable {
      *
      * @return The amount of burned cDai
      */
-    function redeem(address recipient, uint amount) external virtual onlyOwner returns (uint) {
-        /*uint balanceBefore = _cDai.balanceOf(address(this));
-        require(_cDai.redeemUnderlying(amount) == 0, "redeem");
-        uint balanceAfter = _cDai.balanceOf(address(this));
-        require(_dai.transfer(recipient, amount), "dai-transfer");
-        return balanceBefore.sub(balanceAfter);*/
+    function redeem(address recipient, uint256 amount)
+        external
+        virtual
+        onlyOwner
+        returns (uint256)
+    {
+        uint256 balanceBefore = _aDai.balanceOf(address(this));
 
-        uint balanceBefore = _aDai.balanceOf(address(this));
-         console.log("InterestManagerAAVE DAI balance before withdraw: ", _dai.balanceOf(address(this)));
-        console.log("InterestManagerAAVE aDai Balance before withdraw: ", balanceBefore);
         _pool.withdraw(address(_dai), amount, address(this));
-        uint balanceAfter = _aDai.balanceOf(address(this));
-        console.log("InterestManagerAAVE aDai Balance after withraw: ", balanceAfter);
-        console.log("InterestManagerAAVE DAI balance after withdraw: ", _dai.balanceOf(address(this)));
-        require(_dai.transfer(recipient, amount), "dai-transfer");
+        uint256 balanceAfter = _aDai.balanceOf(address(this));
+
+        require(_dai.transfer(recipient, amount), 'dai-transfer');
         return balanceAfter;
     }
 
@@ -122,17 +102,16 @@ contract InterestManagerAave is Ownable, Initializable {
      *
      * @return The amount of redeemed Dai
      */
-    function redeemInvestmentToken(address recipient, uint amount) external virtual onlyOwner returns (uint) {
-       /* uint balanceBefore = _dai.balanceOf(address(this));
-        require(_cDai.redeem(amount) == 0, "redeem");
-        uint redeemed = _dai.balanceOf(address(this)).sub(balanceBefore);
-        require(_dai.transfer(recipient, redeemed), "dai-transfer");
-        return redeemed;*/
-
-        uint balanceBefore = _aDai.balanceOf(address(this));
+    function redeemInvestmentToken(address recipient, uint256 amount)
+        external
+        virtual
+        onlyOwner
+        returns (uint256)
+    {
+        uint256 balanceBefore = _aDai.balanceOf(address(this));
         _pool.withdraw(address(_dai), amount, recipient);
-        uint balanceAfter = _aDai.balanceOf(address(this));
-        require(_dai.transfer(recipient, amount), "dai-transfer");
+        uint256 balanceAfter = _aDai.balanceOf(address(this));
+        require(_dai.transfer(recipient, amount), 'dai-transfer');
         return balanceAfter;
     }
 
@@ -143,7 +122,12 @@ contract InterestManagerAave is Ownable, Initializable {
      *
      * @return The amount of investment tokens
      */
-    function underlyingToInvestmentToken(uint underlyingAmount) external virtual view returns (uint) {
+    function underlyingToInvestmentToken(uint256 underlyingAmount)
+        external
+        view
+        virtual
+        returns (uint256)
+    {
         return underlyingAmount;
     }
 
@@ -154,7 +138,12 @@ contract InterestManagerAave is Ownable, Initializable {
      *
      * @return The amount of underlying tokens
      */
-    function investmentTokenToUnderlying(uint investmentTokenAmount) external virtual view returns (uint) {
+    function investmentTokenToUnderlying(uint256 investmentTokenAmount)
+        external
+        view
+        virtual
+        returns (uint256)
+    {
         return investmentTokenAmount;
     }
 }

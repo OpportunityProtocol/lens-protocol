@@ -181,7 +181,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
         _;
     }
 
-    modifier onlyContractWorker() {
+    modifier onlyContractWorker(uint256 contractId) {
         NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
         require(msg.sender == relationship.worker, 'only contract worker');
         _;
@@ -230,17 +230,17 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
     {
         require(!isRegisteredUser(msg.sender), 'duplicate registration');
         /************ TESTNET ONLY ***************/
-        // proxyProfileCreator.proxyCreateProfile(vars);
-        // bytes memory b;
-        // b = abi.encodePacked(vars.handle, ".test");
-        // string memory registeredHandle = string(b);
+        proxyProfileCreator.proxyCreateProfile(vars);
+        bytes memory b;
+        b = abi.encodePacked(vars.handle, '.test');
+        string memory registeredHandle = string(b);
         /************ END TESTNET ONLY ***************/
 
         /************ MAINNET ***************/
-        lensHub.createProfile(vars);
-        bytes memory b;
-        b = abi.encodePacked(vars.handle);
-        string memory registeredHandle = string(b);
+        // lensHub.createProfile(vars);
+        // bytes memory b;
+        // b = abi.encodePacked(vars.handle);
+        // string memory registeredHandle = string(b);
         // /************ END MAINNET AND LOCAL ONLY ***************/
 
         uint256 profileId = lensHub.getProfileIdByHandle(registeredHandle);
@@ -282,7 +282,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
         uint256[] calldata offers,
         address lensTalentServiceCollectModule,
         address lensTalentReferenceModule
-    ) public returns (uint256) {
+    ) external returns (uint256) {
         require(
             lensTalentServiceCollectModule != address(0),
             'invalid address for service collect module'
@@ -348,7 +348,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
      * @param serviceId The id of the service to purchase
      */
     function purchaseServiceOffering(uint256 serviceId, uint8 offerIndex)
-        public
+        external
         notServiceOwner
         returns (uint256)
     {
@@ -391,7 +391,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
         uint256 serviceId,
         uint256 purchaseId,
         DataTypes.EIP712Signature calldata sig
-    ) public onlyServiceClient {
+    ) external onlyServiceClient {
         NetworkLibrary.PurchasedServiceMetadata memory metadata = purchasedServiceIdToMetdata[
             purchaseId
         ];
@@ -552,7 +552,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
     function releaseContract(uint256 contractId)
         external
         onlyWhenOwnership(contractId, NetworkLibrary.ContractOwnership.Claimed)
-        onlyContractWorker
+        onlyContractWorker(contractId)
     {
         NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
         require(relationship.contractOwnership == NetworkLibrary.ContractOwnership.Claimed);
@@ -840,7 +840,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
      * Returns the list of services
      * @return services an array of all services
      */
-    function getServices() public view returns (NetworkLibrary.Service[] memory) {
+    function getServices() external view returns (NetworkLibrary.Service[] memory) {
         return services;
     }
 
@@ -848,7 +848,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
      * Returns the list of contracts
      * @return contracts an array of all contracts
      */
-    function getContracts() public view returns (NetworkLibrary.Relationship[] memory) {
+    function getContracts() external view returns (NetworkLibrary.Relationship[] memory) {
         return relationships;
     }
 
@@ -857,7 +857,11 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
      * @param serviceId The id of the service
      * @return Service The service to return
      */
-    function getServiceData(uint256 serviceId) public view returns (NetworkLibrary.Service memory) {
+    function getServiceData(uint256 serviceId)
+        external
+        view
+        returns (NetworkLibrary.Service memory)
+    {
         return serviceIdToService[serviceId];
     }
 
@@ -867,7 +871,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
      * @return Contract The contract to return
      */
     function getContractData(uint256 contractId)
-        public
+        external
         view
         returns (NetworkLibrary.Relationship memory)
     {
@@ -887,7 +891,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
      * @param account The address to query
      * @return uint256 The profile id
      */
-    function getLensProfileIdFromAddress(address account) public view returns (uint256) {
+    function getLensProfileIdFromAddress(address account) external view returns (uint256) {
         return addressToLensProfileId[account];
     }
 
@@ -895,7 +899,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
      * Returns the complete list of verified users
      * @return address An array of all verified users
      */
-    function getVerifiedFreelancers() public view returns (address[] memory) {
+    function getVerifiedFreelancers() external view returns (address[] memory) {
         return verifiedFreelancers;
     }
 
@@ -904,7 +908,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
      * @param purchaseId The ID of the purchase
      */
     function getServicePurchaseMetadata(uint256 purchaseId)
-        public
+        external
         view
         returns (NetworkLibrary.PurchasedServiceMetadata memory)
     {

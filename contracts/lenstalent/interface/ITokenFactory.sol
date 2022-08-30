@@ -4,7 +4,6 @@ pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./IServiceToken.sol";
-import "./ITokenNameVerifier.sol";
 
 /**
  * @title ITokenFactory
@@ -47,7 +46,6 @@ interface ITokenFactory {
 
     function addToken(string calldata tokenName, uint marketID, address lister) external returns(uint);
 
-    function isValidTokenName(string calldata tokenName, uint marketID) external view returns (bool);
     function getMarketIDByName(string calldata marketName) external view returns (uint);
     function getMarketDetailsByID(uint marketID) external view returns (MarketDetails memory);
     function getMarketDetailsByName(string calldata marketName) external view returns (MarketDetails memory);
