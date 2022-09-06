@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.7;
 
-import "../../libraries/DataTypes.sol";
-import "../libraries/NetworkLibrary.sol";
+import '../../libraries/DataTypes.sol';
+import '../libraries/NetworkLibrary.sol';
 
 /**
  * @title INetworkManager
@@ -19,6 +19,7 @@ interface INetworkManager {
         address _governance,
         address dai
     ) external;
+
     function register(DataTypes.CreateProfileData calldata vars, string calldata metadata) external;
 
     function updateMetadata(string calldata metadataPtr) external;
@@ -31,7 +32,9 @@ interface INetworkManager {
         address lensTalentReferenceModule
     ) external returns (uint256);
 
-    function purchaseServiceOffering(uint256 serviceId, uint8 offerIndex) external returns (uint256);
+    function purchaseServiceOffering(uint256 serviceId, uint8 offerIndex)
+        external
+        returns (uint256);
 
     function resolveService(
         uint256 serviceId,
@@ -57,16 +60,6 @@ interface INetworkManager {
 
     function updateTaskMetadataPointer(uint256 contractId, string calldata newPointerHash) external;
 
-    function disputeService(uint256 serviceId) external payable;
-
-    function disputeRelationship(uint256 contractId) external payable;
-
-    function depositArbitrationFeeForPayee(uint256 contractId) external payable;
-
-    function remainingTimeToDepositArbitrationFee(uint256 contractId)
-        external
-        view
-        returns (uint256);
 
     function setProtocolFee(uint256 protocolFee) external;
 
@@ -74,7 +67,10 @@ interface INetworkManager {
 
     function getContracts() external view returns (NetworkLibrary.Relationship[] memory);
 
-    function getServiceData(uint256 serviceId) external view returns (NetworkLibrary.Service memory);
+    function getServiceData(uint256 serviceId)
+        external
+        view
+        returns (NetworkLibrary.Service memory);
 
     function getContractData(uint256 contractId)
         external
@@ -91,4 +87,12 @@ interface INetworkManager {
         external
         view
         returns (NetworkLibrary.PurchasedServiceMetadata memory);
+
+    function notifyOfContractArbitrationRequest(bytes32 contractID, address requester) external;
+
+    function triggerDisputeStatus(bytes32 contractID) external;
+
+    function cancelContractArbitration(bytes32 contractID) external;
+
+    function resolveDisputedContract(bytes32 contractID, bytes32 ruling) external;
 }

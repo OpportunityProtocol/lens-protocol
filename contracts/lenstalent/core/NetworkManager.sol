@@ -18,7 +18,7 @@ interface IProfileCreator {
     function proxyCreateProfile(DataTypes.CreateProfileData memory vars) external;
 }
 
-contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidence {
+contract NetworkManager is INetworkManager, Initializable, IEvidence {
     /**
      * Emitted when an address is registered with lenshub and lenstalent.
      *
@@ -129,6 +129,10 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
      */
     event UpdateUserMetadata(address sender, uint256 lensProfileId, string metadataPtr);
 
+    event LogCancelArbitration(bytes32 indexed contractID);
+
+    event LogNotifyOfArbitrationRequest(bytes32 indexed contractID, address indexed requester);
+
     IArbitrator public arbitrator;
     ILensHub public lensHub;
     IProfileCreator public proxyProfileCreator;
@@ -137,14 +141,10 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
 
     uint16 internal constant BPS_MAX = 10000;
     uint256 _claimedServiceCounter;
-    uint256 constant numberOfRulingOptions = 2;
-    uint256 public constant arbitrationFeeDepositPeriod = 1;
     uint256 _protocolFee = 10;
 
     address public governance;
     address public treasury;
-    address public LENS_FOLLOW_MODULE;
-    address public LENS_CONTENT_REFERENCE_MODULE;
     address[] public verifiedFreelancers;
 
     NetworkLibrary.Relationship[] public relationships;
@@ -152,8 +152,6 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
 
     mapping(address => uint256) public addressToLensProfileId;
     mapping(uint256 => uint256) public disputeIDtoRelationshipID;
-    mapping(uint256 => NetworkLibrary.RelationshipEscrowDetails)
-        public relationshipIDToEscrowDetails;
     mapping(uint256 => NetworkLibrary.Relationship) public relationshipIDToRelationship;
     mapping(uint256 => NetworkLibrary.Service) public serviceIdToService;
     mapping(uint256 => NetworkLibrary.PurchasedServiceMetadata) public purchasedServiceIdToMetdata;
@@ -163,7 +161,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
     mapping(uint256 => uint256) public serviceIdToPurchaseId;
     mapping(address => mapping(uint256 => bool)) public workRelationshipToStatus;
 
-    modifier onlyWhenOwnership(uint256 contractId, NetworkLibrary.ContractOwnership ownership) {
+    modifier onlyWhenOwnership(uint256 contractID, NetworkLibrary.ContractOwnership ownership) {
         _;
     }
 
@@ -175,14 +173,19 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
         _;
     }
 
-    modifier onlyContractEmployer(uint256 contractId) {
-        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
+    modifier onlyArbitrator() {
+        require(msg.sender == address(arbitrator), 'Only arbitrator');
+        _;
+    }
+
+    modifier onlyContractEmployer(uint256 contractID) {
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractID];
         require(msg.sender == relationship.employer, 'only contract employer');
         _;
     }
 
-    modifier onlyContractWorker(uint256 contractId) {
-        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
+    modifier onlyContractWorker(uint256 contractID) {
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractID];
         require(msg.sender == relationship.worker, 'only contract worker');
         _;
     }
@@ -230,17 +233,17 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
     {
         require(!isRegisteredUser(msg.sender), 'duplicate registration');
         /************ TESTNET ONLY ***************/
-        proxyProfileCreator.proxyCreateProfile(vars);
-        bytes memory b;
-        b = abi.encodePacked(vars.handle, '.test');
-        string memory registeredHandle = string(b);
+        // proxyProfileCreator.proxyCreateProfile(vars);
+        // bytes memory b;
+        // b = abi.encodePacked(vars.handle, '.test');
+        // string memory registeredHandle = string(b);
         /************ END TESTNET ONLY ***************/
 
         /************ MAINNET ***************/
-        // lensHub.createProfile(vars);
-        // bytes memory b;
-        // b = abi.encodePacked(vars.handle);
-        // string memory registeredHandle = string(b);
+        lensHub.createProfile(vars);
+        bytes memory b;
+        b = abi.encodePacked(vars.handle);
+        string memory registeredHandle = string(b);
         // /************ END MAINNET AND LOCAL ONLY ***************/
 
         uint256 profileId = lensHub.getProfileIdByHandle(registeredHandle);
@@ -481,21 +484,21 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
 
     /**
      * Accepts a proposal for the contract with relationshipId
-     * @param contractId The id of the contract
+     * @param contractID The id of the contract
      * @param newWorker The worker to assign the contract to
      * @param wad The agreed upon payout for the contract
      * @notice Calling this function will initialize the escrow funds
      */
     function grantProposalRequest(
-        uint256 contractId,
+        uint256 contractID,
         address newWorker,
         uint256 wad
     )
         external
-        onlyWhenOwnership(contractId, NetworkLibrary.ContractOwnership.Unclaimed)
-        onlyContractEmployer(contractId)
+        onlyWhenOwnership(contractID, NetworkLibrary.ContractOwnership.Unclaimed)
+        onlyContractEmployer(contractID)
     {
-        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractID];
         require(newWorker != address(relationship.employer), "Can't work your own contract.");
         require(newWorker != address(0), 'You must grant this proposal to a valid worker.');
         require(relationship.worker == address(0), 'This job is already being worked.');
@@ -506,9 +509,10 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
         relationship.acceptanceTimestamp = block.timestamp;
         relationship.contractOwnership = NetworkLibrary.ContractOwnership.Claimed;
 
-        _initializeEscrowFundsAndTransfer(contractId);
+        _dai.transferFrom(relationship.employer, address(this), relationship.wad);
+
         emit ContractOwnershipUpdate(
-            contractId,
+            contractID,
             relationship.marketId,
             NetworkLibrary.ContractOwnership.Claimed,
             relationship.employer,
@@ -519,24 +523,24 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
 
     /**
      * Resolves the contract and transfers escrow funds to the specified worker of the contract
-     * @param contractId The id of the contract
+     * @param contractID The id of the contract
      * @param solutionMetadataPtr The ipfs hash storing the solution metadata
      */
-    function resolveContract(uint256 contractId, string calldata solutionMetadataPtr)
+    function resolveContract(uint256 contractID, string calldata solutionMetadataPtr)
         external
-        onlyWhenOwnership(contractId, NetworkLibrary.ContractOwnership.Claimed)
-        onlyContractEmployer(contractId)
+        onlyWhenOwnership(contractID, NetworkLibrary.ContractOwnership.Claimed)
+        onlyContractEmployer(contractID)
     {
-        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractID];
 
         require(relationship.worker != address(0), 'worker cannot be 0.');
         require(relationship.wad != uint256(0), 'wad cannot be 0');
 
-        _releaseContractFunds(relationship.wad, contractId);
+        _releaseContractFunds(relationship.wad, contractID);
         relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
 
         emit ContractOwnershipUpdate(
-            contractId,
+            contractID,
             relationship.marketId,
             NetworkLibrary.ContractOwnership.Resolved,
             relationship.employer,
@@ -547,18 +551,18 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
 
     /**
      * Allows the worker to release the contract
-     * @param contractId The id of the contract
+     * @param contractID The id of the contract
      */
-    function releaseContract(uint256 contractId)
+    function releaseContract(uint256 contractID)
         external
-        onlyWhenOwnership(contractId, NetworkLibrary.ContractOwnership.Claimed)
-        onlyContractWorker(contractId)
+        onlyWhenOwnership(contractID, NetworkLibrary.ContractOwnership.Claimed)
+        onlyContractWorker(contractID)
     {
-        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractID];
         require(relationship.contractOwnership == NetworkLibrary.ContractOwnership.Claimed);
 
-        _surrenderFunds(contractId);
-        resetRelationshipState(contractId, relationship);
+        _surrenderFunds(contractID);
+        resetRelationshipState(contractID, relationship);
     }
 
     /**
@@ -566,7 +570,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
      * @param contractStruct The contract struct
      */
     function resetRelationshipState(
-        uint256 contractId,
+        uint256 contractID,
         NetworkLibrary.Relationship storage contractStruct
     ) internal {
         contractStruct.worker = address(0);
@@ -575,7 +579,7 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
         contractStruct.contractOwnership = NetworkLibrary.ContractOwnership.Unclaimed;
 
         emit ContractOwnershipUpdate(
-            contractId,
+            contractID,
             contractStruct.marketId,
             NetworkLibrary.ContractOwnership.Unclaimed,
             contractStruct.employer,
@@ -586,14 +590,14 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
 
     /**
      * Updates a contract's ipfs metadata storage hash
-     * @param contractId The id of the contract to update
+     * @param contractID The id of the contract to update
      * @param newPointerHash The hash of the new pointer
      */
-    function updateTaskMetadataPointer(uint256 contractId, string calldata newPointerHash)
+    function updateTaskMetadataPointer(uint256 contractID, string calldata newPointerHash)
         external
-        onlyWhenOwnership(contractId, NetworkLibrary.ContractOwnership.Unclaimed)
+        onlyWhenOwnership(contractID, NetworkLibrary.ContractOwnership.Unclaimed)
     {
-        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractId];
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[contractID];
 
         require(msg.sender == relationship.employer);
         require(relationship.contractOwnership == NetworkLibrary.ContractOwnership.Unclaimed);
@@ -603,221 +607,83 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
 
     ///////////////////////////////////////////// Kleros
 
-    /**
-     * @notice A call to this function initiates the arbitration pay period for the employer of the relationship.
-     * @dev The client must call this function a second time to claim the funds from this contract if employer does not with to enter arbitration.
-     * @param serviceId The id of the relationship to begin a disputed state
-     */
-    function disputeService(uint256 serviceId) external payable {}
-
-    /**
-     * @notice A call to this function initiates the arbitration pay period for the worker of the relationship.
-     * @dev The employer must call this function a second time to claim the funds from this contract if worker does not with to enter arbitration.
-     * @param contractId The id of the relationship to begin a disputed state
-     */
-    function disputeRelationship(uint256 contractId) external payable {
-        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
-
-        NetworkLibrary.RelationshipEscrowDetails
-            storage escrowDetails = relationshipIDToEscrowDetails[contractId];
-
-        if (relationship.contractOwnership != NetworkLibrary.ContractOwnership.Claimed) {
-            revert NetworkLibrary.InvalidStatus();
-        }
-
-        if (msg.sender != relationship.employer) {
-            revert NetworkLibrary.NotPayer();
-        }
-
-        if (escrowDetails.status == NetworkLibrary.EscrowStatus.Reclaimed) {
-            if (block.timestamp - escrowDetails.reclaimedAt <= arbitrationFeeDepositPeriod) {
-                revert NetworkLibrary.PayeeDepositStillPending();
-            }
-
-            _dai.transfer(relationship.worker, relationship.wad + escrowDetails.payerFeeDeposit);
-            escrowDetails.status = NetworkLibrary.EscrowStatus.Resolved;
-
-            relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
-
-            emit ContractOwnershipUpdate(
-                contractId,
-                relationship.marketId,
-                NetworkLibrary.ContractOwnership.Resolved,
-                relationship.employer,
-                relationship.worker,
-                relationship.wad
-            );
-        } else {
-            uint256 requiredAmount = arbitrator.arbitrationCost('');
-            if (msg.value < requiredAmount) {
-                revert NetworkLibrary.InsufficientPayment(msg.value, requiredAmount);
-            }
-
-            escrowDetails.payerFeeDeposit = msg.value;
-            escrowDetails.reclaimedAt = block.timestamp;
-            escrowDetails.status = NetworkLibrary.EscrowStatus.Reclaimed;
-
-            relationship.contractOwnership = NetworkLibrary.ContractOwnership.Disputed;
-
-            emit ContractOwnershipUpdate(
-                contractId,
-                relationship.marketId,
-                NetworkLibrary.ContractOwnership.Disputed,
-                relationship.employer,
-                relationship.worker,
-                relationship.wad
-            );
-        }
-    }
-
-    /**
-     * Deposits the arbitration fee
-     * @param contractId The disputed contract id
-     * @notice Allows a worker to deposit an arbitration fee to accept and join the dispute
-     */
-    function depositArbitrationFeeForPayee(uint256 contractId) external payable {
-        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
-        NetworkLibrary.RelationshipEscrowDetails
-            storage escrowDetails = relationshipIDToEscrowDetails[contractId];
-        require(msg.sender == relationship.worker, 'depositArbitrationFeeForPayee::only worker');
-
-        if (escrowDetails.status != NetworkLibrary.EscrowStatus.Reclaimed) {
-            revert NetworkLibrary.InvalidStatus();
-        }
-
-        escrowDetails.payeeFeeDeposit = msg.value;
-        escrowDetails.disputeID = arbitrator.createDispute{value: msg.value}(
-            numberOfRulingOptions,
-            ''
-        );
-        escrowDetails.status = NetworkLibrary.EscrowStatus.Disputed;
-        disputeIDtoRelationshipID[escrowDetails.disputeID] = contractId;
-        emit Dispute(arbitrator, escrowDetails.disputeID, contractId, contractId);
-    }
-
-    /**
-     * Submites a ruling on a disputed contract
-     * @param disputeId The id of the dispute
-     * @param ruling The submitted ruling for contract
-     * @notice This function is called by the Kleros arbitrator
-     */
-    function rule(uint256 disputeId, uint256 ruling) public override {
-        uint256 contractId = disputeIDtoRelationshipID[disputeId];
-        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
-        NetworkLibrary.RelationshipEscrowDetails
-            storage escrowDetails = relationshipIDToEscrowDetails[contractId];
-
-        if (msg.sender != address(arbitrator)) {
-            revert NetworkLibrary.NotArbitrator();
-        }
-        if (escrowDetails.status != NetworkLibrary.EscrowStatus.Disputed) {
-            revert NetworkLibrary.InvalidStatus();
-        }
-        if (ruling > numberOfRulingOptions) {
-            revert NetworkLibrary.InvalidRuling(ruling, numberOfRulingOptions);
-        }
-
-        escrowDetails.status = NetworkLibrary.EscrowStatus.Resolved;
-
-        if (ruling == uint256(NetworkLibrary.RulingOptions.PayerWins)) {
-            _dai.transfer(relationship.employer, relationship.wad + escrowDetails.payerFeeDeposit);
-        } else {
-            _dai.transfer(relationship.worker, relationship.wad + escrowDetails.payeeFeeDeposit);
-        }
-
-        emit Ruling(arbitrator, disputeId, ruling);
-        relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
-    }
-
-    /**
-     * @notice Allows either party to submit evidence for the ongoing dispute.
-     * @dev The escrow status of the smart contract must be in the disputed state.
-     * @param contractId The id of the relationship to submit evidence.
-     * @param _evidence A link to some evidence provided for this relationship.
-     */
-    function submitEvidence(uint256 contractId, string memory _evidence) public {
-        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
-        NetworkLibrary.RelationshipEscrowDetails
-            storage escrowDetails = relationshipIDToEscrowDetails[contractId];
-
-        if (escrowDetails.status != NetworkLibrary.EscrowStatus.Disputed) {
-            revert NetworkLibrary.InvalidStatus();
-        }
-
-        if (msg.sender != relationship.employer && msg.sender != relationship.worker) {
-            revert NetworkLibrary.ThirdPartyNotAllowed();
-        }
-
-        emit Evidence(arbitrator, contractId, msg.sender, _evidence);
-    }
-
-    /**
-     * @notice Returns the remaining time to deposit the arbitration fee.
-     * @param contractId The id of the relationship to return the remaining time.
-     */
-    function remainingTimeToDepositArbitrationFee(uint256 contractId)
+    /// @notice Notify the contract that the arbitrator has been paid for a disputing a contract, freezing it pending their decision.
+    /// @dev The arbitrator contract is trusted to only call this if they've been paid, and tell us who paid them.
+    /// @dev The arbitrator already checks the status of the contract ownership before making this call
+    /// @param contractID The ID of the contract
+    /// @param requester The account that requested arbitration
+    function notifyOfContractArbitrationRequest(bytes32 contractID, address requester)
         external
-        view
-        returns (uint256)
+        onlyArbitrator
     {
-        NetworkLibrary.RelationshipEscrowDetails
-            storage escrowDetails = relationshipIDToEscrowDetails[contractId];
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[uint256(contractID)];
+        relationship.contractOwnership = NetworkLibrary.ContractOwnership.Reclaimed;
 
-        if (escrowDetails.status != NetworkLibrary.EscrowStatus.Reclaimed) {
-            revert NetworkLibrary.InvalidStatus();
+        emit LogNotifyOfArbitrationRequest(contractID, requester);
+    }
+
+    /// @notice Cancel a previously-requested arbitration and extend the timeout
+    /// @dev Useful when doing arbitration across chains that can't be requested atomically
+    /// @param contractID The ID of the contract
+    function cancelContractArbitration(bytes32 contractID) external onlyArbitrator {
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[uint256(contractID)];
+        require(
+            relationship.contractOwnership == NetworkLibrary.ContractOwnership.Reclaimed,
+            'Contract must already be in a pending dispute state.'
+        );
+
+        relationship.contractOwnership = NetworkLibrary.ContractOwnership.Claimed;
+        emit LogCancelArbitration(contractID);
+    }
+
+    /**
+     */
+    function triggerDisputeStatus(bytes32 contractID) external onlyArbitrator {
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[
+            uint256(contractID)
+        ];
+        require(
+            relationship.contractOwnership == NetworkLibrary.ContractOwnership.Reclaimed,
+            'Contract must already be in a pending dispute state.'
+        );
+
+        relationship.contractOwnership = NetworkLibrary.ContractOwnership.Disputed;
+    }
+
+    function resolveDisputedContract(bytes32 contractID, bytes32 ruling) external onlyArbitrator {
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[uint256(contractID)];
+
+        if (uint256(ruling) == uint256(NetworkLibrary.RulingOptions.EmployerWins)) {
+            _dai.transfer(relationship.employer, relationship.wad);
+        } else if (uint256(ruling) == uint256(NetworkLibrary.RulingOptions.WorkerWins)) {
+            _dai.transfer(relationship.worker, relationship.wad);
+        } else {
+            _dai.transfer(relationship.worker, relationship.wad / 2);
+            _dai.transfer(relationship.employer, relationship.wad / 2);
         }
 
-        return
-            (block.timestamp - escrowDetails.reclaimedAt) > arbitrationFeeDepositPeriod
-                ? 0
-                : (escrowDetails.reclaimedAt + arbitrationFeeDepositPeriod - block.timestamp);
+        relationship.contractOwnership = NetworkLibrary.ContractOwnership.Resolved;
     }
 
     ///////////////////////////////////////////// Escrow
 
     /**
-     * @notice Initializes the funds into the escrow and records the details of the escrow into a struct.
-     * @param contractId The ID of the relationship to initialize escrow details
-     */
-    function _initializeEscrowFundsAndTransfer(uint256 contractId) internal {
-        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
-
-        relationshipIDToEscrowDetails[contractId] = NetworkLibrary.RelationshipEscrowDetails({
-            status: NetworkLibrary.EscrowStatus.Initial,
-            disputeID: contractId,
-            createdAt: block.timestamp,
-            reclaimedAt: 0,
-            payerFeeDeposit: 0,
-            payeeFeeDeposit: 0
-        });
-
-        _dai.transferFrom(relationship.employer, address(this), relationship.wad);
-    }
-
-    /**
      * @notice Releases the escrow funds back to the employer.
-     * @param contractId The ID of the relationship to surrender the funds.
+     * @param contractID The ID of the relationship to surrender the funds.
      */
-    function _surrenderFunds(uint256 contractId) internal {
-        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
-        NetworkLibrary.RelationshipEscrowDetails
-            storage escrowDetails = relationshipIDToEscrowDetails[contractId];
-        require(msg.sender == relationship.worker);
+    function _surrenderFunds(uint256 contractID) internal {
+        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractID];
         _dai.transfer(relationship.employer, relationship.wad);
     }
 
     /**
      * @notice Releases the escrow funds to the worker.
      * @param _amount The amount to release to the worker
-     * @param contractId The ID of the relationship to transfer funds
+     * @param contractID The ID of the relationship to transfer funds
      */
-    function _releaseContractFunds(uint256 _amount, uint256 contractId) internal {
-        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractId];
-        NetworkLibrary.RelationshipEscrowDetails
-            storage escrowDetails = relationshipIDToEscrowDetails[contractId];
-        require(msg.sender == relationship.employer, 'only employer');
+    function _releaseContractFunds(uint256 _amount, uint256 contractID) internal {
+        NetworkLibrary.Relationship memory relationship = relationshipIDToRelationship[contractID];
 
-        escrowDetails.status = NetworkLibrary.EscrowStatus.Resolved;
         uint256 fee = _amount / _protocolFee;
         uint256 payout = _amount - fee;
         _dai.transfer(relationship.worker, payout);
@@ -867,15 +733,15 @@ contract NetworkManager is INetworkManager, Initializable, IArbitrable, IEvidenc
 
     /**
      * Returns contract data based on the specified contract id
-     * @param contractId The id of the contract
+     * @param contractID The id of the contract
      * @return Contract The contract to return
      */
-    function getContractData(uint256 contractId)
+    function getContractData(uint256 contractID)
         external
         view
         returns (NetworkLibrary.Relationship memory)
     {
-        return relationshipIDToRelationship[contractId];
+        return relationshipIDToRelationship[contractID];
     }
 
     /**

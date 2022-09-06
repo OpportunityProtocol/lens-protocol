@@ -87,12 +87,13 @@
     "@graphprotocol/graph-cli": "^0.32.0",
     "@graphprotocol/graph-ts": "^0.27.0",
     "@graphprotocol/hardhat-graph": "^0.1.0-alpha.0",
+    "@kleros/dispute-resolver-interface-contract": "^8.0.0",
     "@openzeppelin/contracts": "^4.6.0",
     "@uniswap/v3-core": "^1.0.1"
   },
   "resolutions": {
     "hardhat/**/@ethereumjs/tx": "3.5.0"
-},
+  },
   "author": "Lens",
   "contributors": [
     "Peter Michael (Zer0dot)",

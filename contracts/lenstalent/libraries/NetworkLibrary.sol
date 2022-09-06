@@ -29,16 +29,6 @@ library NetworkLibrary {
         address valuePtr;
     }
 
-    //contract escrow details struct
-    struct RelationshipEscrowDetails {
-        EscrowStatus status;
-        uint256 disputeID;
-        uint256 createdAt;
-        uint256 reclaimedAt;
-        uint256 payerFeeDeposit;
-        uint256 payeeFeeDeposit;
-    }
-
     //service struct
     struct Service {
         uint256 marketId;
@@ -54,16 +44,9 @@ library NetworkLibrary {
 
     // Enum representing the ruling options for disputes
     enum RulingOptions {
-        PayerWins,
-        PayeeWins
-    }
-
-    // Enum representing the escrow status for a contract and service
-    enum EscrowStatus {
-        Initial,
-        Reclaimed,
-        Disputed,
-        Resolved
+        EmployerWins,
+        WorkerWins,
+        Undecided
     }
 
     // Enum representing the states ownership for a relationship
