@@ -167,11 +167,6 @@ contract NetworkManagerForeignArbitrationProxy is
                 bytes memory data = abi.encodeWithSelector(methodSelector, contractID);
                 _sendMessageToChild(data);
 
-                //TODO: Send message to polygon side to trigger dispute status
-                //
-                //
-                //
-
                 emit ArbitrationCreated(contractID, requester, disputeID);
                 emit Dispute(arbitrator, disputeID, META_EVIDENCE_ID, arbitrationID);
             } catch {
@@ -242,6 +237,12 @@ contract NetworkManagerForeignArbitrationProxy is
         payable(requester).send(deposit);
 
         emit ArbitrationCanceled(contractID, requester);
+    }
+    
+    function handleContractFailedArbitrationNotification(bytes32 contractID, address requester) external override {
+        uint256 arbitrationID = uint256(contractID);
+        ArbitrationRequest storage arbitration = arbitrationRequests[arbitrationID][requester];
+        arbitration.status = Status.Failed;
     }
 
     /**

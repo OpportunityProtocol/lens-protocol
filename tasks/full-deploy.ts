@@ -31,7 +31,6 @@ import {
   TokenFactory__factory,
   ServiceToken__factory,
   NetworkManager__factory,
-  ServiceCollectModule__factory,
   ServiceReferenceModule__factory,
 } from '../typechain-types';
 import { aavePolygonMumbaiDaiAddress, aavePolygonMumbaiPool, polygonMumbaiAaveDaiAddress, polygonMumbaiDaiAddress } from './constants';
@@ -274,16 +273,6 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
       nonce: deployerNonce++,
     })
   );
-  const serviceCollectModule = await deployContract(
-    new ServiceCollectModule__factory(deployer).deploy(
-      lensHub.address,
-      moduleGlobals.address,
-      networkManager.address,
-      {
-        nonce: deployerNonce++,
-      }
-    )
-  );
 
   const serviceReferenceModule = await deployContract(
     new ServiceReferenceModule__factory(deployer).deploy(
@@ -351,9 +340,6 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   );
   await waitForTx(
     lensHub.whitelistCollectModule(freeCollectModule.address, true, { nonce: governanceNonce++ })
-  );
-  await waitForTx(
-    lensHub.connect(governance).whitelistCollectModule(serviceCollectModule.address, true, { nonce: governanceNonce++ })
   );
 
   // Whitelist the follow modules
@@ -460,7 +446,6 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     'Token Exchange': tokenExchange.address,
     'Network Manager': networkManager.address,
     'Token Logic': tokenLogic.address,
-    'Service Collect Module': serviceCollectModule.address,
     'Service Reference Module': serviceReferenceModule.address
   };
   const json = JSON.stringify(addrs, null, 2);

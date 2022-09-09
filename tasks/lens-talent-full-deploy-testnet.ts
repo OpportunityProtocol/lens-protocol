@@ -3,7 +3,6 @@ import { task } from 'hardhat/config';
 import {
   InterestManagerAave__factory,
   NetworkManager__factory,
-  ServiceCollectModule__factory,
   ServiceToken__factory,
   TokenExchange__factory,
   TokenFactory__factory,
@@ -22,26 +21,39 @@ import {
   polygonMumbaiDaiAddress,
 } from './constants';
 
+const sandboxPolygonMumbaiLensHubProxy = '0x7582177F9E536aB0b6c721e11f383C326F2Ad1D5'
+const sandboxPolygonMumbaiLensFeeCollectModule = '0xE98a40DB1170B3A46ffa7bA84335A0A0e9A65C2d'
+const sandboxPolygonMumbaiLensFreeFollowModule = '0x11C45Cbc6fDa2dbe435C0079a2ccF9c4c7051595'
+const sandboxPolygonMumbaiLensFollowOnlyReferenceModule = '0xB080AAc00E53FBeb04917F22096721d602c70759'
+const sandboxPolygonMumbaiLensProfileCreator = '0x4fe8deB1cf6068060dE50aA584C3adf00fbDB87f'
+const sandboxPolygonMumbaiLensInteractionLogic = '0x510f9D630644284AA3570FC28e797eA0ab47AAa3'
+
 task(
   'lens-talent-testnet-full-deploy',
   'deploys lens talent'
 ).setAction(async ({}, hre) => {
-  hre.ethers.provider = new hre.ethers.providers.JsonRpcProvider(hre.ethers.provider.connection.url)
-  hre.run('compile')
+  //hre.ethers.provider = new hre.ethers.providers.JsonRpcProvider(hre.ethers.provider.connection.url)
+  //hre.run('compile')
+
+  try {
 
   const ethers = hre.ethers;
   const signers = await ethers.getSigners();
-  const deployer = signers[0];
-  const admin: Signer = await ethers.getSigner('0xba77d43ee401a4c4a229c3649ccedbfe2b517208');
+  const admin: Signer = signers[0]
+  const deployer = admin
+  const deployerAddress = await admin.getAddress()
+  console.log(deployerAddress)
+  let deployerNonce = await ethers.provider.getTransactionCount(deployerAddress);
 
-  let deployerNonce = await ethers.provider.getTransactionCount(deployer.address);
-
+  console.log('Deploying contracts..')
   //DEPLOY CONTRACTS
   const interestManagerAave = await deployContract(
     new InterestManagerAave__factory(deployer).deploy({
-      nonce: deployerNonce++,
+      nonce: deployerNonce++
     })
   );
+
+  console.log('TRY')
 
   const tokenExchange = await deployContract(
     new TokenExchange__factory(deployer).deploy({
@@ -67,27 +79,7 @@ task(
     })
   );
 
-  const serviceCollectModule = await deployContract(
-    new ServiceCollectModule__factory(deployer).deploy(
-      lensHubPolygonMumbaiAddress,
-      lensMumbaiModuleGlobalPolygonMumbaiAddress,
-      networkManager.address,
-      {
-        nonce: deployerNonce++,
-      }
-    )
-  );
-
-  const serviceReferenceModule = await deployContract(
-    new ServiceCollectModule__factory(deployer).deploy(
-      lensHubPolygonMumbaiAddress,
-      lensMumbaiModuleGlobalPolygonMumbaiAddress,
-      networkManager.address,
-      {
-        nonce: deployerNonce++
-      }
-    )
-  )
+  console.log('Initializing contracts...')
 
   //INITIALIZE CONTRACTS
   await interestManagerAave
@@ -125,11 +117,13 @@ task(
       tokenFactory.address,
       networkManager.address,
       await admin.getAddress(),
-      lensHubPolygonMumbaiAddress,
-      lensHubMumbaiProfileCreationProxyAddress,
+      sandboxPolygonMumbaiLensHubProxy,
+      sandboxPolygonMumbaiLensProfileCreator,
       await admin.getAddress(),
       polygonMumbaiDaiAddress
     );
+
+
 
 
   const TestnetAddresses = {
@@ -138,12 +132,15 @@ task(
     TokenFactory: tokenFactory.address,
     TokenLogic: tokenLogic.address,
     NetworkManager: networkManager.address,
-    ServiceCollectModule: serviceCollectModule.address,
-    ServiceReferenceModule: serviceReferenceModule.address
+    ServiceCollectModule: sandboxPolygonMumbaiLensFeeCollectModule,
+    ServiceReferenceModule: sandboxPolygonMumbaiLensFollowOnlyReferenceModule
   };
 
   const json = JSON.stringify(TestnetAddresses, null, 2);
   console.log(TestnetAddresses);
 
   fs.writeFileSync('mumbai-testnet-addresses.json', json, 'utf-8');
+} catch(error) {
+  console.log(error)
+}
 });

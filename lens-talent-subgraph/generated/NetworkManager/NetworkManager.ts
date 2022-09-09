@@ -530,24 +530,6 @@ export class NetworkManager__getServicesResultValue0Struct extends ethereum.Tupl
   }
 }
 
-export class NetworkManager__purchaseServiceOfferingInputSigStruct extends ethereum.Tuple {
-  get v(): i32 {
-    return this[0].toI32();
-  }
-
-  get r(): Bytes {
-    return this[1].toBytes();
-  }
-
-  get s(): Bytes {
-    return this[2].toBytes();
-  }
-
-  get deadline(): BigInt {
-    return this[3].toBigInt();
-  }
-}
-
 export class NetworkManager__purchasedServiceIdToMetdataResult {
   value0: BigInt;
   value1: Address;
@@ -1564,6 +1546,38 @@ export class NetworkManager extends ethereum.SmartContract {
     return ethereum.CallResult.fromValue(value[0].toBoolean());
   }
 
+  isFamiliarWithService(employer: Address, serviceId: BigInt): boolean {
+    let result = super.call(
+      "isFamiliarWithService",
+      "isFamiliarWithService(address,uint256):(bool)",
+      [
+        ethereum.Value.fromAddress(employer),
+        ethereum.Value.fromUnsignedBigInt(serviceId)
+      ]
+    );
+
+    return result[0].toBoolean();
+  }
+
+  try_isFamiliarWithService(
+    employer: Address,
+    serviceId: BigInt
+  ): ethereum.CallResult<boolean> {
+    let result = super.tryCall(
+      "isFamiliarWithService",
+      "isFamiliarWithService(address,uint256):(bool)",
+      [
+        ethereum.Value.fromAddress(employer),
+        ethereum.Value.fromUnsignedBigInt(serviceId)
+      ]
+    );
+    if (result.reverted) {
+      return new ethereum.CallResult();
+    }
+    let value = result.value;
+    return ethereum.CallResult.fromValue(value[0].toBoolean());
+  }
+
   isRegisteredUser(account: Address): boolean {
     let result = super.call(
       "isRegisteredUser",
@@ -1625,18 +1639,13 @@ export class NetworkManager extends ethereum.SmartContract {
     return ethereum.CallResult.fromValue(value[0].toAddress());
   }
 
-  purchaseServiceOffering(
-    serviceId: BigInt,
-    offerIndex: i32,
-    sig: NetworkManager__purchaseServiceOfferingInputSigStruct
-  ): BigInt {
+  purchaseServiceOffering(serviceId: BigInt, offerIndex: i32): BigInt {
     let result = super.call(
       "purchaseServiceOffering",
-      "purchaseServiceOffering(uint256,uint8,(uint8,bytes32,bytes32,uint256)):(uint256)",
+      "purchaseServiceOffering(uint256,uint8):(uint256)",
       [
         ethereum.Value.fromUnsignedBigInt(serviceId),
-        ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(offerIndex)),
-        ethereum.Value.fromTuple(sig)
+        ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(offerIndex))
       ]
     );
 
@@ -1645,16 +1654,14 @@ export class NetworkManager extends ethereum.SmartContract {
 
   try_purchaseServiceOffering(
     serviceId: BigInt,
-    offerIndex: i32,
-    sig: NetworkManager__purchaseServiceOfferingInputSigStruct
+    offerIndex: i32
   ): ethereum.CallResult<BigInt> {
     let result = super.tryCall(
       "purchaseServiceOffering",
-      "purchaseServiceOffering(uint256,uint8,(uint8,bytes32,bytes32,uint256)):(uint256)",
+      "purchaseServiceOffering(uint256,uint8):(uint256)",
       [
         ethereum.Value.fromUnsignedBigInt(serviceId),
-        ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(offerIndex)),
-        ethereum.Value.fromTuple(sig)
+        ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(offerIndex))
       ]
     );
     if (result.reverted) {
@@ -2270,6 +2277,36 @@ export class DisputeRelationshipCall__Outputs {
   }
 }
 
+export class DisputeServiceCall extends ethereum.Call {
+  get inputs(): DisputeServiceCall__Inputs {
+    return new DisputeServiceCall__Inputs(this);
+  }
+
+  get outputs(): DisputeServiceCall__Outputs {
+    return new DisputeServiceCall__Outputs(this);
+  }
+}
+
+export class DisputeServiceCall__Inputs {
+  _call: DisputeServiceCall;
+
+  constructor(call: DisputeServiceCall) {
+    this._call = call;
+  }
+
+  get serviceId(): BigInt {
+    return this._call.inputValues[0].value.toBigInt();
+  }
+}
+
+export class DisputeServiceCall__Outputs {
+  _call: DisputeServiceCall;
+
+  constructor(call: DisputeServiceCall) {
+    this._call = call;
+  }
+}
+
 export class GrantProposalRequestCall extends ethereum.Call {
   get inputs(): GrantProposalRequestCall__Inputs {
     return new GrantProposalRequestCall__Inputs(this);
@@ -2400,6 +2437,44 @@ export class IsFamiliarCall__Outputs {
   }
 }
 
+export class IsFamiliarWithServiceCall extends ethereum.Call {
+  get inputs(): IsFamiliarWithServiceCall__Inputs {
+    return new IsFamiliarWithServiceCall__Inputs(this);
+  }
+
+  get outputs(): IsFamiliarWithServiceCall__Outputs {
+    return new IsFamiliarWithServiceCall__Outputs(this);
+  }
+}
+
+export class IsFamiliarWithServiceCall__Inputs {
+  _call: IsFamiliarWithServiceCall;
+
+  constructor(call: IsFamiliarWithServiceCall) {
+    this._call = call;
+  }
+
+  get employer(): Address {
+    return this._call.inputValues[0].value.toAddress();
+  }
+
+  get serviceId(): BigInt {
+    return this._call.inputValues[1].value.toBigInt();
+  }
+}
+
+export class IsFamiliarWithServiceCall__Outputs {
+  _call: IsFamiliarWithServiceCall;
+
+  constructor(call: IsFamiliarWithServiceCall) {
+    this._call = call;
+  }
+
+  get value0(): boolean {
+    return this._call.outputValues[0].value.toBoolean();
+  }
+}
+
 export class PurchaseServiceOfferingCall extends ethereum.Call {
   get inputs(): PurchaseServiceOfferingCall__Inputs {
     return new PurchaseServiceOfferingCall__Inputs(this);
@@ -2424,12 +2499,6 @@ export class PurchaseServiceOfferingCall__Inputs {
   get offerIndex(): i32 {
     return this._call.inputValues[1].value.toI32();
   }
-
-  get sig(): PurchaseServiceOfferingCallSigStruct {
-    return changetype<PurchaseServiceOfferingCallSigStruct>(
-      this._call.inputValues[2].value.toTuple()
-    );
-  }
 }
 
 export class PurchaseServiceOfferingCall__Outputs {
@@ -2441,24 +2510,6 @@ export class PurchaseServiceOfferingCall__Outputs {
 
   get value0(): BigInt {
     return this._call.outputValues[0].value.toBigInt();
-  }
-}
-
-export class PurchaseServiceOfferingCallSigStruct extends ethereum.Tuple {
-  get v(): i32 {
-    return this[0].toI32();
-  }
-
-  get r(): Bytes {
-    return this[1].toBytes();
-  }
-
-  get s(): Bytes {
-    return this[2].toBytes();
-  }
-
-  get deadline(): BigInt {
-    return this[3].toBigInt();
   }
 }
 
@@ -2612,6 +2663,12 @@ export class ResolveServiceCall__Inputs {
   get purchaseId(): BigInt {
     return this._call.inputValues[1].value.toBigInt();
   }
+
+  get sig(): ResolveServiceCallSigStruct {
+    return changetype<ResolveServiceCallSigStruct>(
+      this._call.inputValues[2].value.toTuple()
+    );
+  }
 }
 
 export class ResolveServiceCall__Outputs {
@@ -2619,6 +2676,24 @@ export class ResolveServiceCall__Outputs {
 
   constructor(call: ResolveServiceCall) {
     this._call = call;
+  }
+}
+
+export class ResolveServiceCallSigStruct extends ethereum.Tuple {
+  get v(): i32 {
+    return this[0].toI32();
+  }
+
+  get r(): Bytes {
+    return this[1].toBytes();
+  }
+
+  get s(): Bytes {
+    return this[2].toBytes();
+  }
+
+  get deadline(): BigInt {
+    return this[3].toBigInt();
   }
 }
 

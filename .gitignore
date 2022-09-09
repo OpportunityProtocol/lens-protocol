@@ -17,6 +17,8 @@ build/
 /tasks/collect.ts
 /tasks/test-module.ts
 
+/data
+
 /coverage
 coverage.json
 .coverage_artifacts

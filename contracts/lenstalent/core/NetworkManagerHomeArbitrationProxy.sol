@@ -92,21 +92,19 @@ contract NetworkManagerHomeArbitrationProxy is IHomeArbitrationProxy, FxBaseChil
             request.status = Status.Notified;
             contractIDToRequester[contractID] = requester;
 
+            //send receive to root
+            handleNotifiedRequest(contractID, requester);
+
             emit RequestNotified(contractID, requester);
         } catch Error(string memory reason) {
-            /*
-             * Will fail if:
-             *  - The question does not exist.
-             *  - The question was not answered yet.
-             *  - Another request was already accepted.
-             *  - Someone increased the bond on the question to a value > _maxPrevious
-             */
-            request.status = Status.Rejected;
+
+            //send failure to root
+             handleNotifiedFailure(contractID, requester);
 
             emit RequestRejected(contractID, requester, reason);
         } catch {
             // In case `reject` did not have a reason string or some other error happened
-            request.status = Status.Rejected;
+             handleNotifiedFailure(contractID, requester);
 
             emit RequestRejected(contractID, requester, '');
         }
@@ -119,9 +117,9 @@ contract NetworkManagerHomeArbitrationProxy is IHomeArbitrationProxy, FxBaseChil
      * @param contractID The ID of the question.
      * @param requester The address of the user that requested arbitration.
      */
-    function handleNotifiedRequest(bytes32 contractID, address requester) external override {
+    function handleNotifiedRequest(bytes32 contractID, address requester) internal {
         Request storage request = requests[contractID][requester];
-        require(request.status == Status.Notified, 'Invalid request status');
+        //require(request.status == Status.Notified, 'Invalid request status');
 
         request.status = Status.AwaitingRuling;
 
@@ -132,6 +130,21 @@ contract NetworkManagerHomeArbitrationProxy is IHomeArbitrationProxy, FxBaseChil
         _sendMessageToRoot(data);
 
         emit RequestAcknowledged(contractID, requester);
+    }
+
+    function handleNotifiedFailure(bytes32 contractID, address requester) internal {
+        Request storage request = requests[contractID][requester];
+       // require(request.status == Status.Notified, 'Invalid request status');
+
+        request.status = Status.Rejected;
+
+        bytes4 selector = IForeignArbitrationProxy
+            .handleContractFailedArbitrationNotification
+            .selector;
+        bytes memory data = abi.encodeWithSelector(selector, contractID, requester);
+        _sendMessageToRoot(data);
+
+       // emit RequestAcknowledged(contractID, requester);
     }
 
     /**
@@ -146,7 +159,7 @@ contract NetworkManagerHomeArbitrationProxy is IHomeArbitrationProxy, FxBaseChil
      * @param contractID The ID of the question.
      * @param requester The address of the user that requested arbitration.
      */
-    function handleRejectedRequest(bytes32 contractID, address requester) external override {
+    function handleRejectedRequest(bytes32 contractID, address requester) internal {
         Request storage request = requests[contractID][requester];
         require(request.status == Status.Rejected, 'Invalid request status');
 

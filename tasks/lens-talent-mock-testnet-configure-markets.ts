@@ -4,7 +4,6 @@ import {
   InterestManagerAave__factory,
   LensHub__factory,
   NetworkManager__factory,
-  ServiceCollectModule__factory,
   ServiceToken__factory,
   TokenExchange__factory,
   TokenFactory,

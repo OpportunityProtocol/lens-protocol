@@ -63,29 +63,6 @@ interface IHomeArbitrationProxy {
     function receiveContractArbitrationRequest(bytes32 _questionID, address _requester) external;
 
     /**
-     * @notice Handles arbitration request after it has been notified to Realitio for a given question.
-     * @dev This method exists because `receiveArbitrationRequest` is called by
-     * the Polygon Bridge and cannot send messages back to it.
-     * @param _questionID The ID of the question.
-     * @param _requester The address of the arbitration requester.
-     */
-    function handleNotifiedRequest(bytes32 _questionID, address _requester) external;
-
-    /**
-     * @notice Handles arbitration request after it has been rejected.
-     * @dev This method exists because `receiveArbitrationRequest` is called by
-     * the Polygon Bridge and cannot send messages back to it.
-     * Reasons why the request might be rejected:
-     *  - The question does not exist
-     *  - The question was not answered yet
-     *  - The quesiton bond value changed while the arbitration was being requested
-     *  - Another request was already accepted
-     * @param _questionID The ID of the question.
-     * @param _requester The address of the arbitration requester.
-     */
-    function handleRejectedRequest(bytes32 _questionID, address _requester) external;
-
-    /**
      * @notice Receives a failed attempt to request arbitration. TRUSTED.
      * @dev Currently this can happen only if the arbitration cost increased.
      * @param _questionID The ID of the question.
@@ -176,4 +153,6 @@ interface IForeignArbitrationProxy is IArbitrable, IEvidence {
      * @return The fee to create a dispute.
      */
     function getDisputeFee(bytes32 _questionID) external view returns (uint256);
+
+    function handleContractFailedArbitrationNotification(bytes32 contractID, address requester) external;
 }
