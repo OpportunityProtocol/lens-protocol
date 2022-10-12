@@ -42,8 +42,6 @@ interface INetworkManager {
         DataTypes.EIP712Signature calldata sig
     ) external;
 
-    function isFamiliarWithService(address employer, uint256 serviceId) external returns (bool);
-
     function createContract(uint256 marketId, string calldata taskMetadataPtr)
         external
         returns (uint256);

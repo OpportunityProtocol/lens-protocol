@@ -31,7 +31,6 @@ import {
   TokenFactory__factory,
   ServiceToken__factory,
   NetworkManager__factory,
-  ServiceCollectModule__factory,
   ServiceReferenceModule__factory,
 } from '../typechain-types';
 import { aavePolygonMumbaiDaiAddress, aavePolygonMumbaiPool, polygonMumbaiAaveDaiAddress, polygonMumbaiDaiAddress } from './constants';
@@ -60,7 +59,7 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   const governance = accounts[1];
   const treasuryAddress = accounts[2].address;
   const proxyAdminAddress = deployer.address;
-  const profileCreatorAddress = "0x1eeC6ecCaA4625da3Fa6Cd6339DBcc2418710E8a" //deployer.address;
+  const profileCreatorAddress = deployer.address;
 
   const admin: Signer = await ethers.getSigner('0xFaD20fD4eC620BbcA8091eF5DC04b73dc0e2868a')
   const adminAddress = await admin.getAddress()
@@ -274,16 +273,6 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
       nonce: deployerNonce++,
     })
   );
-  const serviceCollectModule = await deployContract(
-    new ServiceCollectModule__factory(deployer).deploy(
-      lensHub.address,
-      moduleGlobals.address,
-      networkManager.address,
-      {
-        nonce: deployerNonce++,
-      }
-    )
-  );
 
   const serviceReferenceModule = await deployContract(
     new ServiceReferenceModule__factory(deployer).deploy(
@@ -351,9 +340,6 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
   );
   await waitForTx(
     lensHub.whitelistCollectModule(freeCollectModule.address, true, { nonce: governanceNonce++ })
-  );
-  await waitForTx(
-    lensHub.connect(governance).whitelistCollectModule(serviceCollectModule.address, true, { nonce: governanceNonce++ })
   );
 
   // Whitelist the follow modules
@@ -460,7 +446,6 @@ task('full-deploy', 'deploys the entire Lens Protocol').setAction(async ({}, hre
     'Token Exchange': tokenExchange.address,
     'Network Manager': networkManager.address,
     'Token Logic': tokenLogic.address,
-    'Service Collect Module': serviceCollectModule.address,
     'Service Reference Module': serviceReferenceModule.address
   };
   const json = JSON.stringify(addrs, null, 2);

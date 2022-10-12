@@ -147,8 +147,9 @@ contract LensHub is LensNFTBase, VersionedInitializable, LensMultiState, LensHub
         whenNotPaused
         returns (uint256)
     {
+        console.log("LENS ONE");
         if (!_profileCreatorWhitelisted[msg.sender]) revert Errors.ProfileCreatorNotWhitelisted();
-
+        console.log("LENS TWO");
         unchecked {
             uint256 profileId = ++_profileCounter;
             _mint(vars.to, profileId);
@@ -640,7 +641,7 @@ contract LensHub is LensNFTBase, VersionedInitializable, LensMultiState, LensHub
         whenNotPaused
         returns (uint256)
     {
-        /*unchecked {
+        unchecked {
             _validateRecoveredAddress(
                 _calculateDigest(
                     keccak256(
@@ -657,7 +658,8 @@ contract LensHub is LensNFTBase, VersionedInitializable, LensMultiState, LensHub
                 vars.collector,
                 vars.sig
             );
-        }*/
+        }
+        
         return
             InteractionLogic.collect(
                 vars.collector,

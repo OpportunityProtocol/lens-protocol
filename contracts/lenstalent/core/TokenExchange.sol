@@ -172,7 +172,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         uint256 invested;
         uint256 dai;
         {
-            uint256 totalRedeemed = _interestManager.redeem(address(this), amounts.total);
+            uint256 totalRedeemed = 100; //_interestManager.redeem(address(this), amounts.total);
             uint256 tradingFeeRedeemed = _interestManager.underlyingToInvestmentToken(
                 amounts.tradingFee
             );
@@ -200,34 +200,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
             platformFeeInvested,
             amounts.raw
         );
-        require(_dai.transfer(recipient, amounts.total), 'dai-transfer');
-    }
-
-    /**
-     * Returns the price for selling ServiceTokens
-     *
-     * @param serviceToken The ServiceToken to sell
-     * @param amount The amount of ServiceTokens to sell
-     *
-     * @return The price in Dai for selling `amount` ServiceTokens
-     */
-    function getPriceForSellingTokens(address serviceToken, uint256 amount)
-        external
-        view
-        virtual
-        override
-        returns (uint256)
-    {
-        MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByTokenAddress(
-            serviceToken
-        );
-        return
-            getPricesForSellingTokens(
-                marketDetails,
-                IERC20(serviceToken).totalSupply(),
-                amount,
-                _tokenFeeKillswitch[serviceToken]
-            ).total;
+        //require(_dai.transfer(recipient, amounts.total), 'dai-transfer');
     }
 
     /**
@@ -335,17 +308,12 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         uint256 cost,
         address recipient
     ) external virtual override {
-        //uint256 marketID = _tokenFactory.getMarketIDByTokenAddress(serviceToken);
         IDPair memory tokenIDPair = _tokenFactory.getTokenIDPair(serviceToken);
         MarketDetails memory marketDetails = _tokenFactory.getMarketDetailsByID(
             (tokenIDPair.marketID)
         );
 
         require(marketDetails.exists, 'token-not-exist');
-        require(
-            _networkManager.isFamiliarWithService(msg.sender, tokenIDPair.tokenID),
-            'you must have purchased this service'
-        );
 
         uint256 supply = IERC20(serviceToken).totalSupply();
         bool feesDisabled = _tokenFeeKillswitch[serviceToken];
@@ -369,12 +337,13 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
             _dai.allowance(msg.sender, address(this)) >= amounts.total,
             'insufficient-allowance'
         );
+        
         require(
             _dai.transferFrom(msg.sender, address(_interestManager), amounts.total),
             'dai-transfer'
         );
 
-        _interestManager.invest(amounts.total);
+      //  _interestManager.invest(amounts.total);
 
         ExchangeInfo storage exchangeInfo;
         if (marketDetails.allInterestToPlatform) {
@@ -408,6 +377,7 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
             platformFeeInvested,
             amounts.total
         );
+
         IServiceToken(serviceToken).mint(recipient, actualAmount);
     }
 

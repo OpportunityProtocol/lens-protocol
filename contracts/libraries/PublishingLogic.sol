@@ -10,7 +10,7 @@ import {Constants} from './Constants.sol';
 import {IFollowModule} from '../interfaces/IFollowModule.sol';
 import {ICollectModule} from '../interfaces/ICollectModule.sol';
 import {IReferenceModule} from '../interfaces/IReferenceModule.sol';
-
+import "hardhat/console.sol";
 /**
  * @title PublishingLogic
  * @author Lens Protocol
@@ -43,22 +43,24 @@ library PublishingLogic {
         mapping(uint256 => DataTypes.ProfileStruct) storage _profileById,
         mapping(address => bool) storage _followModuleWhitelisted
     ) external {
+        console.log("PL 1");
         _validateHandle(vars.handle);
-
+console.log("PL 2");
         if (bytes(vars.imageURI).length > Constants.MAX_PROFILE_IMAGE_URI_LENGTH)
             revert Errors.ProfileImageURILengthInvalid();
 
         bytes32 handleHash = keccak256(bytes(vars.handle));
 
         if (_profileIdByHandleHash[handleHash] != 0) revert Errors.HandleTaken();
-
+console.log("PL 3");
         _profileIdByHandleHash[handleHash] = profileId;
         _profileById[profileId].handle = vars.handle;
         _profileById[profileId].imageURI = vars.imageURI;
         _profileById[profileId].followNFTURI = vars.followNFTURI;
-
+console.log("PL 4");
         bytes memory followModuleReturnData;
         if (vars.followModule != address(0)) {
+            console.log(vars.followModule);
             _profileById[profileId].followModule = vars.followModule;
             followModuleReturnData = _initFollowModule(
                 profileId,
@@ -67,7 +69,7 @@ library PublishingLogic {
                 _followModuleWhitelisted
             );
         }
-
+console.log("PL 5");
         _emitProfileCreated(profileId, vars, followModuleReturnData);
     }
 
@@ -344,7 +346,9 @@ library PublishingLogic {
         bytes memory followModuleInitData,
         mapping(address => bool) storage _followModuleWhitelisted
     ) private returns (bytes memory) {
+        console.log("REV 1");
         if (!_followModuleWhitelisted[followModule]) revert Errors.FollowModuleNotWhitelisted();
+                console.log("REV 2");
         return IFollowModule(followModule).initializeFollowModule(profileId, followModuleInitData);
     }
 

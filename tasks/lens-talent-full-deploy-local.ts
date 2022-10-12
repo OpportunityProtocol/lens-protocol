@@ -88,7 +88,7 @@ task(
     .connect(deployer)
     .initialize(
       await admin.getAddress(),
-      /*polygonMumbaiDaiAddress*/ '0xD40282e050723Ae26Aeb0F77022dB14470f4e011',
+     '0xD40282e050723Ae26Aeb0F77022dB14470f4e011',//polygonMumbaiDaiAddress,
       polygonMumbaiAaveDaiAddress,
       aavePolygonMumbaiPool
     );
@@ -110,7 +110,7 @@ task(
       await admin.getAddress(),
       tokenFactory.address,
       interestManagerAave.address,
-      '0xD40282e050723Ae26Aeb0F77022dB14470f4e011' //polygonMumbaiDaiAddress
+      '0xD40282e050723Ae26Aeb0F77022dB14470f4e011', //polygonMumbaiDaiAddress
     );
 
   await networkManager
@@ -122,7 +122,7 @@ task(
       lensHubPolygonMumbaiAddress,
       lensHubMumbaiProfileCreationProxyAddress,
       await admin.getAddress(),
-      '0xD40282e050723Ae26Aeb0F77022dB14470f4e011' //polygonMumbaiDaiAddress
+      '0xD40282e050723Ae26Aeb0F77022dB14470f4e011', //polygonMumbaiDaiAddress
     );
 
   //add markets
@@ -138,8 +138,12 @@ task(
     )
   );
 
+ /* await waitForTx(
+    moduleGlobals.whitelistCurrency(polygonMumbaiDaiAddress, true)
+  )*/
+
   await waitForTx(
-    moduleGlobals.whitelistCurrency('0xD40282e050723Ae26Aeb0F77022dB14470f4e011'/*polygonMumbaiDaiAddress*/, true)
+    dai.mint('0xFaD20fD4eC620BbcA8091eF5DC04b73dc0e2868a',10000)
   )
 
   const TestnetAddresses = {

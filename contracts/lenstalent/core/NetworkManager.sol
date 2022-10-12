@@ -159,7 +159,6 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
     mapping(uint256 => uint256) public serviceIDToMarketID;
     mapping(uint256 => uint256) public serviceIdToPublicationId;
     mapping(uint256 => uint256) public serviceIdToPurchaseId;
-    mapping(address => mapping(uint256 => bool)) public workRelationshipToStatus;
 
     modifier onlyWhenOwnership(uint256 contractID, NetworkLibrary.ContractOwnership ownership) {
         _;
@@ -231,25 +230,29 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
     function register(DataTypes.CreateProfileData calldata vars, string calldata metadata)
         external
     {
+        console.log('ONE');
         require(!isRegisteredUser(msg.sender), 'duplicate registration');
         /************ TESTNET ONLY ***************/
-        // proxyProfileCreator.proxyCreateProfile(vars);
-        // bytes memory b;
-        // b = abi.encodePacked(vars.handle, '.test');
-        // string memory registeredHandle = string(b);
+        proxyProfileCreator.proxyCreateProfile(vars);
+        console.log('TWO');
+        bytes memory b;
+        b = abi.encodePacked(vars.handle, '.test');
+        string memory registeredHandle = string(b);
         /************ END TESTNET ONLY ***************/
 
         /************ MAINNET ***************/
-        lensHub.createProfile(vars);
-        bytes memory b;
-        b = abi.encodePacked(vars.handle);
-        string memory registeredHandle = string(b);
+        // lensHub.createProfile(vars);
+        // bytes memory b;
+        // b = abi.encodePacked(vars.handle);
+        // string memory registeredHandle = string(b);
         // /************ END MAINNET AND LOCAL ONLY ***************/
 
         uint256 profileId = lensHub.getProfileIdByHandle(registeredHandle);
 
         addressToLensProfileId[msg.sender] = profileId;
         verifiedFreelancers.push(msg.sender);
+
+        lensHub.setDispatcher(profileId, msg.sender);
 
         emit UserRegistered(msg.sender, vars.handle, profileId, vars.imageURI, metadata);
     }
@@ -305,9 +308,9 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
                 profileId: addressToLensProfileId[msg.sender],
                 contentURI: metadataPtr,
                 collectModule: lensTalentServiceCollectModule,
-                collectModuleInitData: abi.encode(offers, address(_dai), msg.sender, serviceId),
+                collectModuleInitData: abi.encode(offers[0], address(_dai), msg.sender, 0, false),
                 referenceModule: lensTalentReferenceModule,
-                referenceModuleInitData: abi.encode(serviceId, msg.sender)
+                referenceModuleInitData: abi.encode()
             })
         );
 
@@ -365,14 +368,13 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
                 creator: service.creator,
                 timestampPurchased: block.timestamp,
                 purchaseId: _claimedServiceCounter,
-                offer: offerIndex,
+                offer: 0,
                 status: NetworkLibrary.ServiceResolutionStatus.PENDING
             });
 
         serviceIdToPurchaseId[serviceId] = _claimedServiceCounter;
 
-        _dai.approve(address(this), service.offers[offerIndex]);
-        _dai.transfer(address(this), service.offers[offerIndex]);
+        _dai.transferFrom(msg.sender, address(this), service.offers[0]);
 
         emit ServicePurchased(
             serviceId,
@@ -380,7 +382,7 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
             serviceIdToPublicationId[serviceId],
             service.creator,
             msg.sender,
-            offerIndex
+            0
         );
         return _claimedServiceCounter;
     }
@@ -407,22 +409,7 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
         require(metadata.client == msg.sender, 'only client');
         require(metadata.exist == true, "service doesn't exist");
 
-        uint256 amount = service.offers[metadata.offer];
-        uint256 treasuryAmount = (amount * _protocolFee) / BPS_MAX;
-        uint256 adjustedAmount = amount - treasuryAmount;
-
-        IERC20(_dai).transfer(service.creator, adjustedAmount);
-
-        if (treasuryAmount > 0) {
-            IERC20(_dai).transfer(address(this), treasuryAmount);
-        }
-
-        bytes memory processCollectData = abi.encode(
-            msg.sender,
-            addressToLensProfileId[msg.sender],
-            serviceId,
-            abi.encode(address(_dai), adjustedAmount)
-        );
+        bytes memory processCollectData = abi.encode(address(_dai), service.offers[0]);
 
         DataTypes.CollectWithSigData memory collectWithSigData = DataTypes.CollectWithSigData({
             collector: msg.sender,
@@ -436,20 +423,9 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
 
         metadata.status = NetworkLibrary.ServiceResolutionStatus.RESOLVED;
 
-        workRelationshipToStatus[msg.sender][serviceId] = true;
-
         emit ServiceResolved(service.creator, msg.sender, purchaseId, serviceId, metadata.offer);
     }
 
-    /**
-     * Provides a status that two parties have worked together in the past.
-     * @notice Only for services
-     * @param employer The purchaser of the service
-     * @param serviceId The service id of the purchased and fulfilled service
-     */
-    function isFamiliarWithService(address employer, uint256 serviceId) external returns (bool) {
-        return workRelationshipToStatus[employer][serviceId];
-    }
 
     ///////////////////////////////////////////// Gig Functions
 
@@ -616,7 +592,9 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
         external
         onlyArbitrator
     {
-        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[uint256(contractID)];
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[
+            uint256(contractID)
+        ];
         relationship.contractOwnership = NetworkLibrary.ContractOwnership.Reclaimed;
 
         emit LogNotifyOfArbitrationRequest(contractID, requester);
@@ -626,7 +604,9 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
     /// @dev Useful when doing arbitration across chains that can't be requested atomically
     /// @param contractID The ID of the contract
     function cancelContractArbitration(bytes32 contractID) external onlyArbitrator {
-        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[uint256(contractID)];
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[
+            uint256(contractID)
+        ];
         require(
             relationship.contractOwnership == NetworkLibrary.ContractOwnership.Reclaimed,
             'Contract must already be in a pending dispute state.'
@@ -651,7 +631,9 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
     }
 
     function resolveDisputedContract(bytes32 contractID, bytes32 ruling) external onlyArbitrator {
-        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[uint256(contractID)];
+        NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[
+            uint256(contractID)
+        ];
 
         if (uint256(ruling) == uint256(NetworkLibrary.RulingOptions.EmployerWins)) {
             _dai.transfer(relationship.employer, relationship.wad);

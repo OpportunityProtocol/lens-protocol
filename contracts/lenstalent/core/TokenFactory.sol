@@ -233,30 +233,6 @@ contract TokenFactory is ITokenFactory, Initializable, Ownable {
         return _marketDetails[marketID];
     }
 
-    /**
-     * Returns the market details by the market name
-     *
-     * @param marketName The market name
-     *
-     * @return The market details
-     */
-    function getMarketDetailsByName(string calldata marketName)
-        external
-        view
-        override
-        returns (MarketDetails memory)
-    {
-        return _marketDetails[0];
-    }
-
-    function getMarketDetailsByTokenAddress(address serviceToken)
-        external
-        view
-        override
-        returns (MarketDetails memory)
-    {
-        return _marketDetails[0];
-    }
 
     /**
      * Returns the amount of existing markets

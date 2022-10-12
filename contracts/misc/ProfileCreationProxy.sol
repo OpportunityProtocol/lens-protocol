@@ -22,7 +22,7 @@ contract ProfileCreationProxy is Ownable {
         LENS_HUB = hub;
     }
 
-    function proxyCreateProfile(DataTypes.CreateProfileData memory vars) external onlyOwner {
+    function proxyCreateProfile(DataTypes.CreateProfileData memory vars) external {
         uint256 handleLength = bytes(vars.handle).length;
         if (handleLength < 5) revert Errors.HandleLengthInvalid();
 
