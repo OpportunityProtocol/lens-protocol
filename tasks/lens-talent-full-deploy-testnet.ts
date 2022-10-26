@@ -44,7 +44,7 @@ task(
 
   const ethers = hre.ethers;
   const signers = await ethers.getSigners();
-  const deployer = signers[0];
+  const deployer = await ethers.getSigner('0xFaD20fD4eC620BbcA8091eF5DC04b73dc0e2868a'); //signers[0];
   const admin: Signer = await ethers.getSigner('0xFaD20fD4eC620BbcA8091eF5DC04b73dc0e2868a');
 
   const moduleGlobals = ModuleGlobals__factory.connect('0xcbCC5b9611d22d11403373432642Df9Ef7Dd81AD', admin)

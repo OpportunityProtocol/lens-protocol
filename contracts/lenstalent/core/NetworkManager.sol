@@ -30,7 +30,7 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
      */
     event UserRegistered(
         address indexed registeredAddress,
-        string indexed lensHandle,
+        string lensHandle,
         uint256 indexed profileId,
         string imageURI,
         string metadata
@@ -117,7 +117,7 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
         uint256 id,
         address indexed creator,
         uint256 indexed marketId,
-        string indexed metadataPtr
+        string metadataPtr
     );
 
     /**
@@ -195,7 +195,7 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
     }
 
     /**
-     * Initializes the
+     * Initializes the contract.
      */
     function initialize(
         address tokenFactory,
@@ -616,8 +616,9 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
         emit LogCancelArbitration(contractID);
     }
 
-    /**
-     */
+
+    /// @notice Triggers a dispute status in the network manager
+    /// @param contractID The ID of the contract
     function triggerDisputeStatus(bytes32 contractID) external onlyArbitrator {
         NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[
             uint256(contractID)
@@ -630,6 +631,9 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
         relationship.contractOwnership = NetworkLibrary.ContractOwnership.Disputed;
     }
 
+    /// @notice Resolves the disputed contract
+    /// @param contractID The ID of the contract
+    /// @param ruling The ruling given at 0 or 1 reflecting the employer or worker.
     function resolveDisputedContract(bytes32 contractID, bytes32 ruling) external onlyArbitrator {
         NetworkLibrary.Relationship storage relationship = relationshipIDToRelationship[
             uint256(contractID)
