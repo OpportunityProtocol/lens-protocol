@@ -230,11 +230,10 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
     function register(DataTypes.CreateProfileData calldata vars, string calldata metadata)
         external
     {
-        console.log('ONE');
         require(!isRegisteredUser(msg.sender), 'duplicate registration');
         /************ TESTNET ONLY ***************/
         proxyProfileCreator.proxyCreateProfile(vars);
-        console.log('TWO');
+
         bytes memory b;
         b = abi.encodePacked(vars.handle, '.test');
         string memory registeredHandle = string(b);
@@ -251,8 +250,6 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
 
         addressToLensProfileId[msg.sender] = profileId;
         verifiedFreelancers.push(msg.sender);
-
-        lensHub.setDispatcher(profileId, msg.sender);
 
         emit UserRegistered(msg.sender, vars.handle, profileId, vars.imageURI, metadata);
     }

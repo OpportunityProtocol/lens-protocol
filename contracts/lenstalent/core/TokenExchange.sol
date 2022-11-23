@@ -173,12 +173,12 @@ contract TokenExchange is ITokenExchange, Initializable, Ownable {
         uint256 dai;
         {
             uint256 totalRedeemed = 100; //_interestManager.redeem(address(this), amounts.total);
-            uint256 tradingFeeRedeemed = _interestManager.underlyingToInvestmentToken(
+            uint256 tradingFeeRedeemed = 0; /*_interestManager.underlyingToInvestmentToken(
                 amounts.tradingFee
-            );
-            uint256 platformFeeRedeemed = _interestManager.underlyingToInvestmentToken(
+            );*/
+            uint256 platformFeeRedeemed = 0; /*_interestManager.underlyingToInvestmentToken(
                 amounts.platformFee
-            );
+            );*/
             invested = exchangeInfo.invested.sub(
                 totalRedeemed.add(tradingFeeRedeemed).add(platformFeeRedeemed)
             );

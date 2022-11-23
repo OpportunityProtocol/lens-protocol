@@ -47,11 +47,11 @@ task(
   const deployer = signers[0];
   const admin: Signer = await ethers.getSigner('0xFaD20fD4eC620BbcA8091eF5DC04b73dc0e2868a');
 
-    const tokenFactory = TokenFactory__factory.connect('0xBA6013db79f9dD76b8D3DeDCE0a4C856e8bbecD5', admin)
+    const tokenFactory = TokenFactory__factory.connect('0xa75af6f336142a2f70feB77a3b20Af7dFFbD9Ce6', admin)
   //add markets
   await waitForTx(
     tokenFactory.addMarket(
-      'Accounting',
+      'Software Development',
       baseCost,
       priceRise,
       hatchTokens,
