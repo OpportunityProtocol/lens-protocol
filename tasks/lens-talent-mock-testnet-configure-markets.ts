@@ -70,7 +70,7 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
     );
 
 
-    await networkManager.connect(signers[6]).register({
+   /* await networkManager.connect(signers[6]).register({
       to: addresses['Network Manager'],
       handle: handles[6],
       imageURI: MOCK_PROFILE_URI,
@@ -120,7 +120,7 @@ task('lens-talent-configure-markets', 'starts the lens talent ui with appropriat
     .createContract(1, 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu')
 
     await networkManager.connect(admin).createContract(1, 'https://ipfs.io/ipfs/Qme7ss3ARVgxv6rXqVPiikMJ8u2NLgmgszg13pYrDKEoiu')
-
+      */
     console.log('Minting dai...')
     await dai.functions['mint(uint256)'](10000)
     console.log('Finish minting dai...')

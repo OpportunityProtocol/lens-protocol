@@ -52,3 +52,13 @@
 00:11:24.826991 db@open done T·25.315712ms
 00:21:58.127335 db@close closing
 00:21:58.128342 db@close done T·1.004875ms
+=============== Sep 10, 2022 (UTC) ===============
+21:39:42.589125 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+21:39:42.595583 version@stat F·[2] S·2KiB[2KiB] Sc·[0.50]
+21:39:42.596063 db@open opening
+21:39:42.596982 journal@recovery F·1
+21:39:42.598437 journal@recovery recovering @10
+21:39:42.610487 memdb@flush created L0@12 N·31 S·3KiB "/F5..KZY,v30":"/pr..CWO,v33"
+21:39:42.613800 version@stat F·[3] S·6KiB[6KiB] Sc·[0.75]
+21:39:42.625114 db@janitor F·5 G·0
+21:39:42.625604 db@open done T·28.918174ms

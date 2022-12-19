@@ -233,21 +233,22 @@ contract NetworkManager is INetworkManager, Initializable, IEvidence {
     {
         require(!isRegisteredUser(msg.sender), 'duplicate registration');
         /************ TESTNET ONLY ***************/
-        // proxyProfileCreator.proxyCreateProfile(vars);
-        // bytes memory b;
-        // b = abi.encodePacked(vars.handle, '.test');
-        // string memory registeredHandle = string(b);
+        proxyProfileCreator.proxyCreateProfile(vars);
+        bytes memory b;
+        b = abi.encodePacked(vars.handle, '.test');
+        string memory registeredHandle = string(b);
         /************ END TESTNET ONLY ***************/
 
         /************ MAINNET ***************/
-        lensHub.createProfile(vars);
-        bytes memory b;
-        b = abi.encodePacked(vars.handle);
-        string memory registeredHandle = string(b);
+        // lensHub.createProfile(vars);
+        // bytes memory b;
+        // b = abi.encodePacked(vars.handle);
+        // string memory registeredHandle = string(b);
         // /************ END MAINNET AND LOCAL ONLY ***************/
 
         uint256 profileId = lensHub.getProfileIdByHandle(registeredHandle);
-
+        
+        lensHub.setDispatcher(profileId, address(this));
         addressToLensProfileId[msg.sender] = profileId;
         verifiedFreelancers.push(msg.sender);
 
